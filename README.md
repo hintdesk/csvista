@@ -6,6 +6,12 @@ Homepage: [https://hintdesk.github.io/csvista](https://hintdesk.github.io/csvist
 
 Users can create a project, upload one CSV file, and view the data directly in the browser.
 
+## Screenshots
+
+![Project list](readme/1.png)
+
+![Project data view](readme/2.png)
+
 ## Main Features
 
 - Project management
