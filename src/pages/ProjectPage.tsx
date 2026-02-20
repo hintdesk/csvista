@@ -1,7 +1,6 @@
 import { type ChangeEvent, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { dataService, type SortDirection } from '@/services/dataService'
 import { type Project, projectService } from '@/services/projectService'
@@ -65,10 +64,6 @@ export default function ProjectPage() {
         setTotalRows(result.total)
         setSqlPreview(result.sql)
 
-        if (!sortField && result.fields.length > 0) {
-          setSortField(result.fields[0])
-        }
-
         if (!filterField && result.fields.length > 0) {
           setFilterField(result.fields[0])
         }
@@ -112,7 +107,7 @@ export default function ProjectPage() {
       const importResult = await dataService.importCsv(project.id, csvText)
 
       setFields(importResult.fields)
-      setSortField(importResult.fields[0] ?? '')
+      setSortField('')
       setFilterField(importResult.fields[0] ?? '')
       setFilterInputValue('')
       setAppliedFilterValue('')
@@ -126,166 +121,163 @@ export default function ProjectPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-4xl flex-col gap-4 p-6">
+    <main className="flex min-h-screen w-full flex-col gap-4 p-6">
       <Button type="button" variant="outline" size="sm" onClick={() => navigate('/')} className="self-start">
         Back
       </Button>
       {project ? (
-        <Card className="gap-4">
-          <CardHeader>
-            <CardTitle className="text-2xl">Project</CardTitle>
-            <CardDescription>ID: {project.id}</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
+        <section className="flex flex-col gap-4">
+          <header className="flex flex-col gap-1">
+            <h1 className="text-2xl font-semibold">Project</h1>
+            <p className="text-sm text-muted-foreground">ID: {project.id}</p>
             <p className="text-base">Name: {project.name}</p>
+          </header>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <Button type="button" onClick={() => fileInputRef.current?.click()} disabled={isImporting}>
-                {isImporting ? 'Importing...' : 'Import data'}
-              </Button>
-              <input ref={fileInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={onImportCsv} />
-            </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" onClick={() => fileInputRef.current?.click()} disabled={isImporting}>
+              {isImporting ? 'Importing...' : 'Import data'}
+            </Button>
+            <input ref={fileInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={onImportCsv} />
+          </div>
 
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="flex flex-col gap-2">
-                <p className="text-sm font-medium">Sort</p>
-                <div className="flex gap-2">
-                  <select
-                    value={sortField}
-                    onChange={(event) => {
-                      setSortField(event.target.value)
-                      setPage(1)
-                    }}
-                    className="h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
-                    disabled={fields.length === 0}
-                  >
-                    {fields.length === 0 ? <option value="">Không có field</option> : null}
-                    {fields.map((field) => (
-                      <option key={field} value={field}>
-                        {field}
-                      </option>
-                    ))}
-                  </select>
-
-                  <select
-                    value={sortDirection}
-                    onChange={(event) => {
-                      setSortDirection(event.target.value as SortDirection)
-                      setPage(1)
-                    }}
-                    className="h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
-                    disabled={fields.length === 0}
-                  >
-                    <option value="asc">Ascending</option>
-                    <option value="desc">Descending</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <p className="text-sm font-medium">Filter</p>
-                <div className="flex gap-2">
-                  <select
-                    value={filterField}
-                    onChange={(event) => setFilterField(event.target.value)}
-                    className="h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
-                    disabled={fields.length === 0}
-                  >
-                    {fields.length === 0 ? <option value="">Không có field</option> : null}
-                    {fields.map((field) => (
-                      <option key={field} value={field}>
-                        {field}
-                      </option>
-                    ))}
-                  </select>
-                  <Input
-                    value={filterInputValue}
-                    onChange={(event) => setFilterInputValue(event.target.value)}
-                    placeholder="Nhập giá trị filter"
-                    disabled={fields.length === 0}
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      setAppliedFilterValue(filterInputValue)
-                      setPage(1)
-                    }}
-                    disabled={fields.length === 0}
-                  >
-                    Apply
-                  </Button>
-                </div>
-              </div>
-            </div>
-
-            {errorMessage ? <p className="text-sm text-destructive">{errorMessage}</p> : null}
-
-            <div className="overflow-x-auto rounded-md border">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b">
-                    {fields.map((field) => (
-                      <th key={field} className="px-3 py-2 text-left font-medium">
-                        {field}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {isLoadingRows ? (
-                    <tr>
-                      <td colSpan={Math.max(fields.length, 1)} className="px-3 py-4 text-center text-muted-foreground">
-                        Loading...
-                      </td>
-                    </tr>
-                  ) : rows.length === 0 ? (
-                    <tr>
-                      <td colSpan={Math.max(fields.length, 1)} className="px-3 py-4 text-center text-muted-foreground">
-                        Chưa có dữ liệu.
-                      </td>
-                    </tr>
-                  ) : (
-                    rows.map((row, rowIndex) => (
-                      <tr key={`${page}-${rowIndex}`} className="border-b last:border-b-0">
-                        {fields.map((field) => (
-                          <td key={`${rowIndex}-${field}`} className="px-3 py-2 align-top">
-                            {row[field]}
-                          </td>
-                        ))}
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-sm text-muted-foreground">
-                Page {page}/{totalPages} · {totalRows} rows · {sqlPreview}
-              </p>
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="flex flex-col gap-2">
+              <p className="text-sm font-medium">Sort</p>
               <div className="flex gap-2">
-                <Button type="button" variant="outline" onClick={() => setPage((prev) => Math.max(prev - 1, 1))} disabled={page <= 1}>
-                  Previous
-                </Button>
+                <select
+                  value={sortField}
+                  onChange={(event) => {
+                    setSortField(event.target.value)
+                    setPage(1)
+                  }}
+                  className="h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
+                  disabled={fields.length === 0}
+                >
+                  <option value="">None</option>
+                  {fields.length === 0 ? <option value="">Không có field</option> : null}
+                  {fields.map((field) => (
+                    <option key={field} value={field}>
+                      {field}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  value={sortDirection}
+                  onChange={(event) => {
+                    setSortDirection(event.target.value as SortDirection)
+                    setPage(1)
+                  }}
+                  className="h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
+                  disabled={fields.length === 0 || !sortField}
+                >
+                  <option value="asc">Ascending</option>
+                  <option value="desc">Descending</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <p className="text-sm font-medium">Filter</p>
+              <div className="flex gap-2">
+                <select
+                  value={filterField}
+                  onChange={(event) => setFilterField(event.target.value)}
+                  className="h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
+                  disabled={fields.length === 0}
+                >
+                  {fields.length === 0 ? <option value="">Không có field</option> : null}
+                  {fields.map((field) => (
+                    <option key={field} value={field}>
+                      {field}
+                    </option>
+                  ))}
+                </select>
+                <Input
+                  value={filterInputValue}
+                  onChange={(event) => setFilterInputValue(event.target.value)}
+                  placeholder="Nhập giá trị filter"
+                  disabled={fields.length === 0}
+                />
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => setPage((prev) => Math.min(prev + 1, totalPages))}
-                  disabled={page >= totalPages}
+                  onClick={() => {
+                    setAppliedFilterValue(filterInputValue)
+                    setPage(1)
+                  }}
+                  disabled={fields.length === 0}
                 >
-                  Next
+                  Apply
                 </Button>
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+
+          {errorMessage ? <p className="text-sm text-destructive">{errorMessage}</p> : null}
+
+          <div className="overflow-x-auto rounded-md border">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b">
+                  {fields.map((field) => (
+                    <th key={field} className="px-3 py-2 text-left font-medium">
+                      {field}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {isLoadingRows ? (
+                  <tr className="border-b">
+                    <td colSpan={Math.max(fields.length, 1)} className="px-3 py-4 text-center text-muted-foreground">
+                      Loading...
+                    </td>
+                  </tr>
+                ) : rows.length === 0 ? (
+                  <tr>
+                    <td colSpan={Math.max(fields.length, 1)} className="px-3 py-4 text-center text-muted-foreground">
+                      Chưa có dữ liệu.
+                    </td>
+                  </tr>
+                ) : (
+                  rows.map((row, rowIndex) => (
+                    <tr key={`${page}-${rowIndex}`} className="border-b last:border-b-0">
+                      {fields.map((field) => (
+                        <td key={`${rowIndex}-${field}`} className="px-3 py-2 align-top">
+                          <div className="max-h-12 overflow-hidden text-ellipsis whitespace-pre-wrap break-words [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">
+                            {row[field]}
+                          </div>
+                        </td>
+                      ))}
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm text-muted-foreground">
+              Page {page}/{totalPages} · {totalRows} rows · {sqlPreview}
+            </p>
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" onClick={() => setPage((prev) => Math.max(prev - 1, 1))} disabled={page <= 1}>
+                Previous
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setPage((prev) => Math.min(prev + 1, totalPages))}
+                disabled={page >= totalPages}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        </section>
       ) : (
-        <Card>
-          <CardContent>
-            <p>Không tìm thấy project.</p>
-          </CardContent>
-        </Card>
+        <p>Không tìm thấy project.</p>
       )}
     </main>
   )
