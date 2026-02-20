@@ -1,73 +1,64 @@
-# React + TypeScript + Vite
+# CSVista
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+CSVista is a CSV Viewer web application.
 
-Currently, two official plugins are available:
+Users can create a project, upload one CSV file, and view the data directly in the browser.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Main Features
 
-## React Compiler
+- Project management
+  - Create a project
+  - Open a project
+  - Rename a project
+  - Delete a project with confirmation
+- CSV import and online viewing
+  - Import CSV into the selected project
+  - Render tabular data with pagination
+  - Show row detail panel
+- Data operations
+  - Sort by any column (ascending or descending)
+  - Filter by selected column and text query
+  - Filter supports a None option (no filtering)
+- Local persistence
+  - Projects are stored in localStorage
+  - Project data is stored in IndexedDB
+  - Deleting a project also removes its IndexedDB table
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Tech Stack
 
-## Expanding the ESLint configuration
+- React 19
+- TypeScript
+- Vite
+- Tailwind CSS
+- idb (IndexedDB wrapper)
+- Papa Parse (CSV parsing)
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Getting Started
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+1. Install dependencies
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+   npm install
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+2. Start development server
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+   npm run dev
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+3. Build for production
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+   npm run build
+
+4. Preview production build
+
+   npm run preview
+
+## Project Structure (Key Files)
+
+- [src/pages/ProjectListPage.tsx](src/pages/ProjectListPage.tsx): Project list, create dialog, delete confirmation
+- [src/pages/ProjectPage.tsx](src/pages/ProjectPage.tsx): CSV import, table view, sort, filter, row detail
+- [src/services/projectService.ts](src/services/projectService.ts): Project CRUD with localStorage
+- [src/services/dataService.ts](src/services/dataService.ts): CSV parse and IndexedDB query/store logic
+
+## Notes
+
+- All data stays in the browser (no backend service).
+- This app is designed for fast local CSV inspection and exploration.
