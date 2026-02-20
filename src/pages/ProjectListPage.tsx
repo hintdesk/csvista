@@ -17,7 +17,20 @@ export default function ProjectListPage() {
   const [pendingDeleteProject, setPendingDeleteProject] = useState<Project | null>(null)
 
   useEffect(() => {
-    setProjects(projectService.getProjects())
+    let isCancelled = false
+
+    const loadProjects = async () => {
+      const projectList = await projectService.getProjects()
+      if (!isCancelled) {
+        setProjects(projectList)
+      }
+    }
+
+    void loadProjects()
+
+    return () => {
+      isCancelled = true
+    }
   }, [])
 
   const onDeleteProject = (event: MouseEvent<HTMLButtonElement>, id: string) => {
@@ -37,7 +50,8 @@ export default function ProjectListPage() {
     }
 
     await dataService.deleteProjectTable(pendingDeleteProject.id)
-    setProjects(projectService.deleteProject(pendingDeleteProject.id))
+    const nextProjects = await projectService.deleteProject(pendingDeleteProject.id)
+    setProjects(nextProjects)
     setPendingDeleteProject(null)
     setIsDeleteDialogOpen(false)
   }
@@ -48,8 +62,8 @@ export default function ProjectListPage() {
     navigate('/')
   }
 
-  const onOpenProject = (id: string) => {
-    const loadedProject = projectService.loadProject(id)
+  const onOpenProject = async (id: string) => {
+    const loadedProject = await projectService.loadProject(id)
     if (!loadedProject) {
       return
     }
@@ -66,14 +80,14 @@ export default function ProjectListPage() {
     setNewProjectName('')
   }
 
-  const onSaveCreateProject = () => {
+  const onSaveCreateProject = async () => {
     const trimmedName = newProjectName.trim()
     if (!trimmedName) {
       return
     }
 
-    projectService.createProject(trimmedName)
-    setProjects(projectService.getProjects())
+    await projectService.createProject(trimmedName)
+    setProjects(await projectService.getProjects())
     setIsCreateDialogOpen(false)
     setNewProjectName('')
   }

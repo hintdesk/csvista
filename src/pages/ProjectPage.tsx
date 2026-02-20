@@ -37,9 +37,23 @@ export default function ProjectPage() {
       return
     }
 
-    const loadedProject = projectService.loadProject(id)
-    setProject(loadedProject)
-    setEditProjectName(loadedProject?.name ?? '')
+    let isCancelled = false
+
+    const loadProject = async () => {
+      const loadedProject = await projectService.loadProject(id)
+      if (isCancelled) {
+        return
+      }
+
+      setProject(loadedProject)
+      setEditProjectName(loadedProject?.name ?? '')
+    }
+
+    void loadProject()
+
+    return () => {
+      isCancelled = true
+    }
   }, [id])
 
   useEffect(() => {
@@ -141,12 +155,12 @@ export default function ProjectPage() {
     setEditProjectName(project?.name ?? '')
   }
 
-  const onSaveEditProject = () => {
+  const onSaveEditProject = async () => {
     if (!project) {
       return
     }
 
-    const updatedProject = projectService.updateProject(project.id, { name: editProjectName })
+    const updatedProject = await projectService.updateProject(project.id, { name: editProjectName })
     if (!updatedProject) {
       return
     }

@@ -1,14 +1,37 @@
 import { Link, Route, Routes, matchPath, useLocation } from 'react-router-dom'
+import { useEffect, useState } from 'react'
 import ProjectListPage from '@/pages/ProjectListPage'
 import ProjectPage from '@/pages/ProjectPage'
-import { projectService } from '@/services/projectService'
+import { type Project, projectService } from '@/services/projectService'
 import csvFileLogo from '@/assets/csv-file.png'
 
 function App() {
   const location = useLocation()
   const projectMatch = matchPath('/project/:id', location.pathname)
   const currentProjectId = projectMatch?.params.id
-  const currentProject = currentProjectId ? projectService.getProjectById(currentProjectId) : undefined
+  const [currentProject, setCurrentProject] = useState<Project | undefined>()
+
+  useEffect(() => {
+    if (!currentProjectId) {
+      setCurrentProject(undefined)
+      return
+    }
+
+    let isCancelled = false
+
+    const loadCurrentProject = async () => {
+      const project = await projectService.getProjectById(currentProjectId)
+      if (!isCancelled) {
+        setCurrentProject(project)
+      }
+    }
+
+    void loadCurrentProject()
+
+    return () => {
+      isCancelled = true
+    }
+  }, [currentProjectId])
 
   return (
     <div className="min-h-screen w-full">

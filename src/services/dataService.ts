@@ -2,6 +2,7 @@ import { openDB, type IDBPDatabase } from 'idb'
 import Papa from 'papaparse'
 
 const DATABASE_NAME = 'csvista'
+const PROJECTS_STORE_NAME = 'projects'
 
 export type SortDirection = 'asc' | 'desc'
 
@@ -27,9 +28,22 @@ function getDb(version?: number, storeToCreate?: string) {
   if (!dbPromise || version !== undefined) {
     dbPromise = openDB(DATABASE_NAME, version, {
       upgrade(db) {
+        if (!db.objectStoreNames.contains(PROJECTS_STORE_NAME)) {
+          db.createObjectStore(PROJECTS_STORE_NAME, { keyPath: 'id' })
+        }
+
         if (storeToCreate && !db.objectStoreNames.contains(storeToCreate)) {
           db.createObjectStore(storeToCreate, { keyPath: 'id', autoIncrement: true })
         }
+      },
+      blocked() {
+        dbPromise = null
+      },
+      blocking() {
+        dbPromise = null
+      },
+      terminated() {
+        dbPromise = null
       },
     })
   }
@@ -66,9 +80,22 @@ async function deleteProjectStore(projectId: string): Promise<void> {
 
   dbPromise = openDB(DATABASE_NAME, nextVersion, {
     upgrade(upgradeDb) {
+      if (!upgradeDb.objectStoreNames.contains(PROJECTS_STORE_NAME)) {
+        upgradeDb.createObjectStore(PROJECTS_STORE_NAME, { keyPath: 'id' })
+      }
+
       if (upgradeDb.objectStoreNames.contains(projectId)) {
         upgradeDb.deleteObjectStore(projectId)
       }
+    },
+    blocked() {
+      dbPromise = null
+    },
+    blocking() {
+      dbPromise = null
+    },
+    terminated() {
+      dbPromise = null
     },
   })
 
