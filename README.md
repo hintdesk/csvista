@@ -2,6 +2,8 @@
 
 CSVista is a CSV Viewer web application.
 
+Homepage: [https://hintdesk.github.io/csvista](https://hintdesk.github.io/csvista)
+
 Users can create a project, upload one CSV file, and view the data directly in the browser.
 
 ## Main Features
