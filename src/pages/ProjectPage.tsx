@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from '@/components/ui/combobox'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { dataService, type SortDirection } from '@/services/dataService'
 import { type Project, projectService } from '@/services/projectService'
 
@@ -301,57 +302,57 @@ export default function ProjectPage() {
           <div className="flex items-start gap-4">
             <div className="min-w-0 flex-1">
               <div className="overflow-x-auto rounded-md border">
-                <table className="w-full table-fixed text-sm">
-                  <thead>
-                    <tr className="border-b">
+                <Table className="table-fixed">
+                  <TableHeader>
+                    <TableRow>
                       {fields.map((field) => (
-                        <th key={field} className="w-56 max-w-56 px-3 py-2 text-left font-medium">
+                        <TableHead key={field} className="w-56 max-w-56 px-3 py-2">
                           <div className="truncate" title={field}>
                             {field}
                           </div>
-                        </th>
+                        </TableHead>
                       ))}
-                    </tr>
-                  </thead>
-                  <tbody>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {isLoadingRows ? (
-                      <tr className="border-b">
-                        <td colSpan={Math.max(fields.length, 1)} className="px-3 py-4 text-center text-muted-foreground">
+                      <TableRow>
+                        <TableCell colSpan={Math.max(fields.length, 1)} className="px-3 py-4 text-center text-muted-foreground">
                           Loading...
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ) : rows.length === 0 ? (
-                      <tr>
-                        <td colSpan={Math.max(fields.length, 1)} className="px-3 py-4 text-center text-muted-foreground">
+                      <TableRow>
+                        <TableCell colSpan={Math.max(fields.length, 1)} className="px-3 py-4 text-center text-muted-foreground">
                           No data available.
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ) : (
                       rows.map((row, rowIndex) => {
                         const isSelected = selectedRow === row
 
                         return (
-                          <tr
+                          <TableRow
                             key={`${page}-${rowIndex}`}
-                            className={`cursor-pointer border-b last:border-b-0 ${isSelected ? 'bg-accent/70' : 'hover:bg-accent/40'}`}
+                            className={`cursor-pointer ${isSelected ? 'bg-accent/70' : 'hover:bg-accent/40'}`}
                             onClick={() => setSelectedRow(row)}
                           >
                             {fields.map((field) => (
-                              <td key={`${rowIndex}-${field}`} className="w-56 max-w-56 px-3 py-2 align-top">
+                              <TableCell key={`${rowIndex}-${field}`} className="w-56 max-w-56 px-3 py-2 align-top whitespace-normal">
                                 <div
                                   className="max-h-12 overflow-hidden whitespace-pre-wrap break-all [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]"
                                   title={row[field]}
                                 >
                                   {row[field]}
                                 </div>
-                              </td>
+                              </TableCell>
                             ))}
-                          </tr>
+                          </TableRow>
                         )
                       })
                     )}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
 
               <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
