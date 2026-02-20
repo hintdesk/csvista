@@ -2,6 +2,7 @@ import { Link, Route, Routes, matchPath, useLocation } from 'react-router-dom'
 import ProjectListPage from '@/pages/ProjectListPage'
 import ProjectPage from '@/pages/ProjectPage'
 import { projectService } from '@/services/projectService'
+import csvFileLogo from '@/assets/csv-file.png'
 
 function App() {
   const location = useLocation()
@@ -13,13 +14,7 @@ function App() {
     <div className="min-h-screen w-full">
       <header className="border-b px-6 py-4">
         <div className="flex items-center gap-3">
-          <svg width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="CSVista logo" className="shrink-0">
-            <rect x="2" y="2" width="28" height="28" rx="6" className="fill-primary/15 stroke-primary" strokeWidth="2" />
-            <path d="M9 11.5h14M9 16h14M9 20.5h14" className="stroke-primary" strokeWidth="2" strokeLinecap="round" />
-            <circle cx="12" cy="11.5" r="1" className="fill-primary" />
-            <circle cx="12" cy="16" r="1" className="fill-primary" />
-            <circle cx="12" cy="20.5" r="1" className="fill-primary" />
-          </svg>
+          <img src={csvFileLogo} alt="CSVista logo" className="h-8 w-8 shrink-0 object-contain" />
           <Link to="/" className="text-xl font-semibold tracking-tight">
             CSVista
           </Link>

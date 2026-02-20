@@ -71,10 +71,6 @@ export default function ProjectPage() {
         setTotalRows(result.total)
         setSqlPreview(result.sql)
         setSelectedRow(null)
-
-        if (!filterField && result.fields.length > 0) {
-          setFilterField(result.fields[0])
-        }
       } catch (error) {
         if (isCancelled) {
           return
@@ -116,7 +112,7 @@ export default function ProjectPage() {
 
       setFields(importResult.fields)
       setSortField('')
-      setFilterField(importResult.fields[0] ?? '')
+      setFilterField('')
       setFilterInputValue('')
       setAppliedFilterValue('')
       setPage(1)
@@ -229,13 +225,20 @@ export default function ProjectPage() {
                 <Combobox
                   value={filterField || null}
                   onValueChange={(value) => {
-                    setFilterField((value as string) ?? '')
+                    const nextFilterField = (value as string) ?? ''
+                    setFilterField(nextFilterField)
+                    if (!nextFilterField) {
+                      setFilterInputValue('')
+                      setAppliedFilterValue('')
+                      setPage(1)
+                    }
                   }}
                 >
-                  <ComboboxInput className="w-full" placeholder="Select field" disabled={fields.length === 0} readOnly />
+                  <ComboboxInput className="w-full" placeholder="None" disabled={fields.length === 0} readOnly />
                   <ComboboxContent>
                     <ComboboxEmpty>No fields available</ComboboxEmpty>
                     <ComboboxList>
+                      <ComboboxItem value="">None</ComboboxItem>
                       {fields.map((field) => (
                         <ComboboxItem key={field} value={field}>
                           {field}
@@ -256,7 +259,7 @@ export default function ProjectPage() {
                     }}
                     className="pr-8"
                     placeholder="Enter filter value"
-                    disabled={fields.length === 0}
+                    disabled={fields.length === 0 || !filterField}
                   />
                   {filterInputValue ? (
                     <button
