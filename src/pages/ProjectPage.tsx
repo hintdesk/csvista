@@ -1,13 +1,31 @@
-import { useEffect, useState } from 'react'
+import { type ChangeEvent, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { dataService, type SortDirection } from '@/services/dataService'
 import { type Project, projectService } from '@/services/projectService'
+
+const PAGE_SIZE = 1000
 
 export default function ProjectPage() {
   const navigate = useNavigate()
   const { id = '' } = useParams()
   const [project, setProject] = useState<Project | undefined>()
+  const [rows, setRows] = useState<Record<string, string>[]>([])
+  const [fields, setFields] = useState<string[]>([])
+  const [totalRows, setTotalRows] = useState(0)
+  const [page, setPage] = useState(1)
+  const [sortField, setSortField] = useState('')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
+  const [filterField, setFilterField] = useState('')
+  const [filterInputValue, setFilterInputValue] = useState('')
+  const [appliedFilterValue, setAppliedFilterValue] = useState('')
+  const [sqlPreview, setSqlPreview] = useState('')
+  const [isLoadingRows, setIsLoadingRows] = useState(false)
+  const [isImporting, setIsImporting] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!id) {
@@ -16,6 +34,96 @@ export default function ProjectPage() {
 
     setProject(projectService.loadProject(id))
   }, [id])
+
+  useEffect(() => {
+    if (!project) {
+      return
+    }
+
+    let isCancelled = false
+
+    const loadRows = async () => {
+      setIsLoadingRows(true)
+      setErrorMessage('')
+
+      try {
+        const result = await dataService.queryProjectRows(project.id, {
+          page,
+          pageSize: PAGE_SIZE,
+          sortField: sortField || undefined,
+          sortDirection,
+          filterField: filterField || undefined,
+          filterValue: appliedFilterValue || undefined,
+        })
+
+        if (isCancelled) {
+          return
+        }
+
+        setRows(result.rows)
+        setFields(result.fields)
+        setTotalRows(result.total)
+        setSqlPreview(result.sql)
+
+        if (!sortField && result.fields.length > 0) {
+          setSortField(result.fields[0])
+        }
+
+        if (!filterField && result.fields.length > 0) {
+          setFilterField(result.fields[0])
+        }
+      } catch (error) {
+        if (isCancelled) {
+          return
+        }
+
+        setErrorMessage(error instanceof Error ? error.message : 'Không thể tải dữ liệu từ IndexedDB.')
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingRows(false)
+        }
+      }
+    }
+
+    void loadRows()
+
+    return () => {
+      isCancelled = true
+    }
+  }, [appliedFilterValue, filterField, page, project, sortDirection, sortField])
+
+  const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE))
+
+  const onImportCsv = async (event: ChangeEvent<HTMLInputElement>) => {
+    if (!project) {
+      return
+    }
+
+    const file = event.target.files?.[0]
+    if (!file) {
+      return
+    }
+
+    setIsImporting(true)
+    setErrorMessage('')
+
+    try {
+      const csvText = await file.text()
+      const importResult = await dataService.importCsv(project.id, csvText)
+
+      setFields(importResult.fields)
+      setSortField(importResult.fields[0] ?? '')
+      setFilterField(importResult.fields[0] ?? '')
+      setFilterInputValue('')
+      setAppliedFilterValue('')
+      setPage(1)
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Import CSV thất bại.')
+    } finally {
+      event.target.value = ''
+      setIsImporting(false)
+    }
+  }
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-4xl flex-col gap-4 p-6">
@@ -28,8 +136,148 @@ export default function ProjectPage() {
             <CardTitle className="text-2xl">Project</CardTitle>
             <CardDescription>ID: {project.id}</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex flex-col gap-4">
             <p className="text-base">Name: {project.name}</p>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" onClick={() => fileInputRef.current?.click()} disabled={isImporting}>
+                {isImporting ? 'Importing...' : 'Import data'}
+              </Button>
+              <input ref={fileInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={onImportCsv} />
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="flex flex-col gap-2">
+                <p className="text-sm font-medium">Sort</p>
+                <div className="flex gap-2">
+                  <select
+                    value={sortField}
+                    onChange={(event) => {
+                      setSortField(event.target.value)
+                      setPage(1)
+                    }}
+                    className="h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
+                    disabled={fields.length === 0}
+                  >
+                    {fields.length === 0 ? <option value="">Không có field</option> : null}
+                    {fields.map((field) => (
+                      <option key={field} value={field}>
+                        {field}
+                      </option>
+                    ))}
+                  </select>
+
+                  <select
+                    value={sortDirection}
+                    onChange={(event) => {
+                      setSortDirection(event.target.value as SortDirection)
+                      setPage(1)
+                    }}
+                    className="h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
+                    disabled={fields.length === 0}
+                  >
+                    <option value="asc">Ascending</option>
+                    <option value="desc">Descending</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <p className="text-sm font-medium">Filter</p>
+                <div className="flex gap-2">
+                  <select
+                    value={filterField}
+                    onChange={(event) => setFilterField(event.target.value)}
+                    className="h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
+                    disabled={fields.length === 0}
+                  >
+                    {fields.length === 0 ? <option value="">Không có field</option> : null}
+                    {fields.map((field) => (
+                      <option key={field} value={field}>
+                        {field}
+                      </option>
+                    ))}
+                  </select>
+                  <Input
+                    value={filterInputValue}
+                    onChange={(event) => setFilterInputValue(event.target.value)}
+                    placeholder="Nhập giá trị filter"
+                    disabled={fields.length === 0}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setAppliedFilterValue(filterInputValue)
+                      setPage(1)
+                    }}
+                    disabled={fields.length === 0}
+                  >
+                    Apply
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {errorMessage ? <p className="text-sm text-destructive">{errorMessage}</p> : null}
+
+            <div className="overflow-x-auto rounded-md border">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b">
+                    {fields.map((field) => (
+                      <th key={field} className="px-3 py-2 text-left font-medium">
+                        {field}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {isLoadingRows ? (
+                    <tr>
+                      <td colSpan={Math.max(fields.length, 1)} className="px-3 py-4 text-center text-muted-foreground">
+                        Loading...
+                      </td>
+                    </tr>
+                  ) : rows.length === 0 ? (
+                    <tr>
+                      <td colSpan={Math.max(fields.length, 1)} className="px-3 py-4 text-center text-muted-foreground">
+                        Chưa có dữ liệu.
+                      </td>
+                    </tr>
+                  ) : (
+                    rows.map((row, rowIndex) => (
+                      <tr key={`${page}-${rowIndex}`} className="border-b last:border-b-0">
+                        {fields.map((field) => (
+                          <td key={`${rowIndex}-${field}`} className="px-3 py-2 align-top">
+                            {row[field]}
+                          </td>
+                        ))}
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm text-muted-foreground">
+                Page {page}/{totalPages} · {totalRows} rows · {sqlPreview}
+              </p>
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" onClick={() => setPage((prev) => Math.max(prev - 1, 1))} disabled={page <= 1}>
+                  Previous
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setPage((prev) => Math.min(prev + 1, totalPages))}
+                  disabled={page >= totalPages}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
           </CardContent>
         </Card>
       ) : (
