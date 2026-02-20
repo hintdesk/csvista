@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { dataService, type SortDirection } from '@/services/dataService'
 import { type Project, projectService } from '@/services/projectService'
 
-const PAGE_SIZE = 1000
+const PAGE_SIZE = 10
 
 export default function ProjectPage() {
   const { id = '' } = useParams()
@@ -287,12 +287,14 @@ export default function ProjectPage() {
           <div className="flex items-start gap-4">
             <div className="min-w-0 flex-1">
               <div className="overflow-x-auto rounded-md border">
-                <table className="w-full text-sm">
+                <table className="w-full table-fixed text-sm">
                   <thead>
                     <tr className="border-b">
                       {fields.map((field) => (
-                        <th key={field} className="px-3 py-2 text-left font-medium">
-                          {field}
+                        <th key={field} className="w-56 max-w-56 px-3 py-2 text-left font-medium">
+                          <div className="truncate" title={field}>
+                            {field}
+                          </div>
                         </th>
                       ))}
                     </tr>
@@ -321,8 +323,11 @@ export default function ProjectPage() {
                             onClick={() => setSelectedRow(row)}
                           >
                             {fields.map((field) => (
-                              <td key={`${rowIndex}-${field}`} className="px-3 py-2 align-top">
-                                <div className="max-h-12 overflow-hidden text-ellipsis whitespace-pre-wrap break-words [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">
+                              <td key={`${rowIndex}-${field}`} className="w-56 max-w-56 px-3 py-2 align-top">
+                                <div
+                                  className="max-h-12 overflow-hidden whitespace-pre-wrap break-all [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]"
+                                  title={row[field]}
+                                >
                                   {row[field]}
                                 </div>
                               </td>
