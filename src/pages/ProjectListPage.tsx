@@ -1,4 +1,5 @@
 import { type MouseEvent, useEffect, useState } from 'react'
+import { Trash } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -75,8 +76,14 @@ export default function ProjectListPage() {
             >
               <CardContent className="flex items-center justify-between px-0 py-0">
                 <span className="truncate">{project.name}</span>
-                <Button type="button" variant="outline" size="sm" onClick={(event) => onDeleteProject(event, project.id)}>
-                  Xóa
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon-sm"
+                  aria-label={`Delete project ${project.name}`}
+                  onClick={(event) => onDeleteProject(event, project.id)}
+                >
+                  <Trash />
                 </Button>
               </CardContent>
             </Card>

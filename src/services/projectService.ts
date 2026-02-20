@@ -83,6 +83,37 @@ export const projectService = {
     return nextProjects
   },
 
+  updateProject(id: string, payload: { name: string }): Project | undefined {
+    const nextName = payload.name.trim()
+    if (!nextName) {
+      return undefined
+    }
+
+    const projects = this.getProjects()
+    let updatedProject: Project | undefined
+
+    const nextProjects = projects.map((project) => {
+      if (project.id !== id) {
+        return project
+      }
+
+      updatedProject = {
+        ...project,
+        name: nextName,
+        updatedAt: new Date().toISOString(),
+      }
+
+      return updatedProject
+    })
+
+    if (!updatedProject) {
+      return undefined
+    }
+
+    saveProjects(nextProjects)
+    return updatedProject
+  },
+
   loadProject(id: string): Project | undefined {
     const project = this.getProjectById(id)
     if (!project) {

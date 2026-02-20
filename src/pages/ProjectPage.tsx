@@ -1,6 +1,8 @@
 import { type ChangeEvent, useEffect, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { FileSpreadsheet, Pencil, X } from 'lucide-react'
+import { useParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { dataService, type SortDirection } from '@/services/dataService'
 import { type Project, projectService } from '@/services/projectService'
@@ -8,7 +10,6 @@ import { type Project, projectService } from '@/services/projectService'
 const PAGE_SIZE = 1000
 
 export default function ProjectPage() {
-  const navigate = useNavigate()
   const { id = '' } = useParams()
   const [project, setProject] = useState<Project | undefined>()
   const [rows, setRows] = useState<Record<string, string>[]>([])
@@ -22,6 +23,8 @@ export default function ProjectPage() {
   const [appliedFilterValue, setAppliedFilterValue] = useState('')
   const [sqlPreview, setSqlPreview] = useState('')
   const [selectedRow, setSelectedRow] = useState<Record<string, string> | null>(null)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [editProjectName, setEditProjectName] = useState('')
   const [isLoadingRows, setIsLoadingRows] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
@@ -32,7 +35,9 @@ export default function ProjectPage() {
       return
     }
 
-    setProject(projectService.loadProject(id))
+    const loadedProject = projectService.loadProject(id)
+    setProject(loadedProject)
+    setEditProjectName(loadedProject?.name ?? '')
   }, [id])
 
   useEffect(() => {
@@ -123,22 +128,49 @@ export default function ProjectPage() {
     }
   }
 
+  const onOpenEditDialog = () => {
+    if (!project) {
+      return
+    }
+
+    setEditProjectName(project.name)
+    setIsEditDialogOpen(true)
+  }
+
+  const onCancelEditProject = () => {
+    setIsEditDialogOpen(false)
+    setEditProjectName(project?.name ?? '')
+  }
+
+  const onSaveEditProject = () => {
+    if (!project) {
+      return
+    }
+
+    const updatedProject = projectService.updateProject(project.id, { name: editProjectName })
+    if (!updatedProject) {
+      return
+    }
+
+    setProject(updatedProject)
+    setIsEditDialogOpen(false)
+  }
+
   return (
     <main className="flex min-h-screen w-full flex-col gap-4 p-6">
-      <Button type="button" variant="outline" size="sm" onClick={() => navigate('/')} className="self-start">
-        Back
-      </Button>
       {project ? (
         <section className="flex flex-col gap-4">
-          <header className="flex flex-col gap-1">
-            <h1 className="text-2xl font-semibold">Project</h1>
-            <p className="text-sm text-muted-foreground">ID: {project.id}</p>
-            <p className="text-base">Name: {project.name}</p>
+          <header className="flex items-center gap-2">
+            <h1 className="text-2xl font-semibold">{project.name}</h1>
+            <Button type="button" variant="ghost" size="icon-sm" aria-label="Edit project" onClick={onOpenEditDialog}>
+              <Pencil />
+            </Button>
           </header>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" onClick={() => fileInputRef.current?.click()} disabled={isImporting}>
-              {isImporting ? 'Importing...' : 'Import data'}
+          <div className="flex justify-end">
+            <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={isImporting} aria-label="Import data">
+              <FileSpreadsheet />
+              <span>Import</span>
             </Button>
             <input ref={fileInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={onImportCsv} />
           </div>
@@ -153,7 +185,7 @@ export default function ProjectPage() {
                     setSortField(event.target.value)
                     setPage(1)
                   }}
-                  className="h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
+                  className="h-9 w-full rounded-md border border-input bg-transparent py-1 pr-8 pl-3 text-sm shadow-xs"
                   disabled={fields.length === 0}
                 >
                   <option value="">None</option>
@@ -171,7 +203,7 @@ export default function ProjectPage() {
                     setSortDirection(event.target.value as SortDirection)
                     setPage(1)
                   }}
-                  className="h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
+                  className="h-9 rounded-md border border-input bg-transparent py-1 pr-8 pl-3 text-sm shadow-xs"
                   disabled={fields.length === 0 || !sortField}
                 >
                   <option value="asc">Ascending</option>
@@ -186,7 +218,7 @@ export default function ProjectPage() {
                 <select
                   value={filterField}
                   onChange={(event) => setFilterField(event.target.value)}
-                  className="h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
+                  className="h-9 w-full rounded-md border border-input bg-transparent py-1 pr-8 pl-3 text-sm shadow-xs"
                   disabled={fields.length === 0}
                 >
                   {fields.length === 0 ? <option value="">Không có field</option> : null}
@@ -196,23 +228,35 @@ export default function ProjectPage() {
                     </option>
                   ))}
                 </select>
-                <Input
-                  value={filterInputValue}
-                  onChange={(event) => setFilterInputValue(event.target.value)}
-                  placeholder="Nhập giá trị filter"
-                  disabled={fields.length === 0}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setAppliedFilterValue(filterInputValue)
-                    setPage(1)
-                  }}
-                  disabled={fields.length === 0}
-                >
-                  Apply
-                </Button>
+                <div className="relative w-full">
+                  <Input
+                    value={filterInputValue}
+                    onChange={(event) => setFilterInputValue(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        setAppliedFilterValue(filterInputValue)
+                        setPage(1)
+                      }
+                    }}
+                    className="pr-8"
+                    placeholder="Nhập giá trị filter"
+                    disabled={fields.length === 0}
+                  />
+                  {filterInputValue ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFilterInputValue('')
+                        setAppliedFilterValue('')
+                        setPage(1)
+                      }}
+                      className="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      aria-label="Clear filter"
+                    >
+                      <X className="size-4" />
+                    </button>
+                  ) : null}
+                </div>
               </div>
             </div>
           </div>
@@ -314,6 +358,36 @@ export default function ProjectPage() {
       ) : (
         <p>Không tìm thấy project.</p>
       )}
+
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit project</DialogTitle>
+            <DialogDescription>Cập nhật thông tin project.</DialogDescription>
+          </DialogHeader>
+
+          <Input
+            placeholder="Project name"
+            value={editProjectName}
+            onChange={(event) => setEditProjectName(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                onSaveEditProject()
+              }
+            }}
+            autoFocus
+          />
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onCancelEditProject}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={onSaveEditProject} disabled={!editProjectName.trim()}>
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </main>
   )
 }
