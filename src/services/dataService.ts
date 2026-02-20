@@ -54,6 +54,27 @@ async function ensureProjectStore(projectId: string): Promise<void> {
   })
 }
 
+async function deleteProjectStore(projectId: string): Promise<void> {
+  const db = await getDb()
+  if (!db.objectStoreNames.contains(projectId)) {
+    return
+  }
+
+  const nextVersion = db.version + 1
+  db.close()
+  dbPromise = null
+
+  dbPromise = openDB(DATABASE_NAME, nextVersion, {
+    upgrade(upgradeDb) {
+      if (upgradeDb.objectStoreNames.contains(projectId)) {
+        upgradeDb.deleteObjectStore(projectId)
+      }
+    },
+  })
+
+  await dbPromise
+}
+
 function normalizeCsvRows(rows: unknown[]): Record<string, string>[] {
   return rows
     .filter((row): row is Record<string, unknown> => typeof row === 'object' && row !== null)
@@ -172,5 +193,9 @@ export const dataService = {
       total: processedRows.length,
       sql: buildSqlLikeQuery(projectId, params),
     }
+  },
+
+  async deleteProjectTable(projectId: string): Promise<void> {
+    await deleteProjectStore(projectId)
   },
 }

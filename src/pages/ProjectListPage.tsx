@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { dataService } from '@/services/dataService'
 import { type Project, projectService } from '@/services/projectService'
 
 export default function ProjectListPage() {
@@ -12,6 +13,8 @@ export default function ProjectListPage() {
   const [projects, setProjects] = useState<Project[]>([])
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [newProjectName, setNewProjectName] = useState('')
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [pendingDeleteProject, setPendingDeleteProject] = useState<Project | null>(null)
 
   useEffect(() => {
     setProjects(projectService.getProjects())
@@ -19,7 +22,30 @@ export default function ProjectListPage() {
 
   const onDeleteProject = (event: MouseEvent<HTMLButtonElement>, id: string) => {
     event.stopPropagation()
-    setProjects(projectService.deleteProject(id))
+    const project = projects.find((item) => item.id === id)
+    if (!project) {
+      return
+    }
+
+    setPendingDeleteProject(project)
+    setIsDeleteDialogOpen(true)
+  }
+
+  const onConfirmDeleteProject = async () => {
+    if (!pendingDeleteProject) {
+      return
+    }
+
+    await dataService.deleteProjectTable(pendingDeleteProject.id)
+    setProjects(projectService.deleteProject(pendingDeleteProject.id))
+    setPendingDeleteProject(null)
+    setIsDeleteDialogOpen(false)
+  }
+
+  const onCancelDeleteProject = () => {
+    setPendingDeleteProject(null)
+    setIsDeleteDialogOpen(false)
+    navigate('/')
   }
 
   const onOpenProject = (id: string) => {
@@ -120,6 +146,26 @@ export default function ProjectListPage() {
             </Button>
             <Button type="button" onClick={onSaveCreateProject} disabled={!newProjectName.trim()}>
               Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete project</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete &quot;{pendingDeleteProject?.name ?? ''}&quot;?
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onCancelDeleteProject}>
+              No
+            </Button>
+            <Button type="button" variant="destructive" onClick={onConfirmDeleteProject}>
+              Yes
             </Button>
           </DialogFooter>
         </DialogContent>
