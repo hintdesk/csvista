@@ -29,6 +29,7 @@ export default function ProjectPage() {
   const [isLoadingRows, setIsLoadingRows] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
+  const [refreshKey, setRefreshKey] = useState(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -89,7 +90,7 @@ export default function ProjectPage() {
     return () => {
       isCancelled = true
     }
-  }, [appliedFilterValue, filterField, page, project, sortDirection, sortField])
+  }, [appliedFilterValue, filterField, page, project, refreshKey, sortDirection, sortField])
 
   const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE))
 
@@ -117,6 +118,7 @@ export default function ProjectPage() {
       setAppliedFilterValue('')
       setPage(1)
       setSelectedRow(null)
+      setRefreshKey((previous) => previous + 1)
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'CSV import failed.')
     } finally {
