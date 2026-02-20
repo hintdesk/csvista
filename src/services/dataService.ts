@@ -49,7 +49,7 @@ async function ensureProjectStore(projectId: string): Promise<void> {
 
   await getDb(nextVersion, projectId).then((nextDb) => {
     if (!nextDb.objectStoreNames.contains(projectId)) {
-      throw new Error('Không thể tạo table cho project trong IndexedDB.')
+      throw new Error('Unable to create a project table in IndexedDB.')
     }
   })
 }
@@ -110,7 +110,7 @@ export const dataService = {
     })
 
     if (parseResult.errors.length > 0) {
-      throw new Error(parseResult.errors[0]?.message ?? 'Không thể parse file CSV.')
+      throw new Error(parseResult.errors[0]?.message ?? 'Unable to parse CSV file.')
     }
 
     const rows = normalizeCsvRows(parseResult.data)

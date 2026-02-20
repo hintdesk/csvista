@@ -2,6 +2,7 @@ import { type ChangeEvent, useEffect, useRef, useState } from 'react'
 import { FileSpreadsheet, Pencil, X } from 'lucide-react'
 import { useParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
+import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from '@/components/ui/combobox'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { dataService, type SortDirection } from '@/services/dataService'
@@ -79,7 +80,7 @@ export default function ProjectPage() {
           return
         }
 
-        setErrorMessage(error instanceof Error ? error.message : 'Không thể tải dữ liệu từ IndexedDB.')
+        setErrorMessage(error instanceof Error ? error.message : 'Unable to load data from IndexedDB.')
       } finally {
         if (!isCancelled) {
           setIsLoadingRows(false)
@@ -121,7 +122,7 @@ export default function ProjectPage() {
       setPage(1)
       setSelectedRow(null)
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Import CSV thất bại.')
+      setErrorMessage(error instanceof Error ? error.message : 'CSV import failed.')
     } finally {
       event.target.value = ''
       setIsImporting(false)
@@ -179,55 +180,70 @@ export default function ProjectPage() {
             <div className="flex flex-col gap-2">
               <p className="text-sm font-medium">Sort</p>
               <div className="flex gap-2">
-                <select
-                  value={sortField}
-                  onChange={(event) => {
-                    setSortField(event.target.value)
+                <Combobox
+                  value={sortField || null}
+                  onValueChange={(value) => {
+                    setSortField((value as string) ?? '')
                     setPage(1)
                   }}
-                  className="h-9 w-full rounded-md border border-input bg-transparent py-1 pr-8 pl-3 text-sm shadow-xs"
-                  disabled={fields.length === 0}
                 >
-                  <option value="">None</option>
-                  {fields.length === 0 ? <option value="">Không có field</option> : null}
-                  {fields.map((field) => (
-                    <option key={field} value={field}>
-                      {field}
-                    </option>
-                  ))}
-                </select>
+                  <ComboboxInput className="w-full" placeholder="None" disabled={fields.length === 0} readOnly />
+                  <ComboboxContent>
+                    <ComboboxEmpty>No fields available</ComboboxEmpty>
+                    <ComboboxList>
+                      <ComboboxItem value="">None</ComboboxItem>
+                      {fields.map((field) => (
+                        <ComboboxItem key={field} value={field}>
+                          {field}
+                        </ComboboxItem>
+                      ))}
+                    </ComboboxList>
+                  </ComboboxContent>
+                </Combobox>
 
-                <select
-                  value={sortDirection}
-                  onChange={(event) => {
-                    setSortDirection(event.target.value as SortDirection)
+                <Combobox
+                  value={sortDirection === 'asc' ? 'Ascending' : 'Descending'}
+                  onValueChange={(value) => {
+                    if (!value) {
+                      return
+                    }
+
+                    setSortDirection(value === 'Ascending' ? 'asc' : 'desc')
                     setPage(1)
                   }}
-                  className="h-9 rounded-md border border-input bg-transparent py-1 pr-8 pl-3 text-sm shadow-xs"
-                  disabled={fields.length === 0 || !sortField}
                 >
-                  <option value="asc">Ascending</option>
-                  <option value="desc">Descending</option>
-                </select>
+                  <ComboboxInput className="w-[180px]" disabled={fields.length === 0 || !sortField} readOnly />
+                  <ComboboxContent>
+                    <ComboboxList>
+                      <ComboboxItem value="Ascending">Ascending</ComboboxItem>
+                      <ComboboxItem value="Descending">Descending</ComboboxItem>
+                    </ComboboxList>
+                  </ComboboxContent>
+                </Combobox>
               </div>
             </div>
 
             <div className="flex flex-col gap-2">
               <p className="text-sm font-medium">Filter</p>
               <div className="flex gap-2">
-                <select
-                  value={filterField}
-                  onChange={(event) => setFilterField(event.target.value)}
-                  className="h-9 w-full rounded-md border border-input bg-transparent py-1 pr-8 pl-3 text-sm shadow-xs"
-                  disabled={fields.length === 0}
+                <Combobox
+                  value={filterField || null}
+                  onValueChange={(value) => {
+                    setFilterField((value as string) ?? '')
+                  }}
                 >
-                  {fields.length === 0 ? <option value="">Không có field</option> : null}
-                  {fields.map((field) => (
-                    <option key={field} value={field}>
-                      {field}
-                    </option>
-                  ))}
-                </select>
+                  <ComboboxInput className="w-full" placeholder="Select field" disabled={fields.length === 0} readOnly />
+                  <ComboboxContent>
+                    <ComboboxEmpty>No fields available</ComboboxEmpty>
+                    <ComboboxList>
+                      {fields.map((field) => (
+                        <ComboboxItem key={field} value={field}>
+                          {field}
+                        </ComboboxItem>
+                      ))}
+                    </ComboboxList>
+                  </ComboboxContent>
+                </Combobox>
                 <div className="relative w-full">
                   <Input
                     value={filterInputValue}
@@ -239,7 +255,7 @@ export default function ProjectPage() {
                       }
                     }}
                     className="pr-8"
-                    placeholder="Nhập giá trị filter"
+                    placeholder="Enter filter value"
                     disabled={fields.length === 0}
                   />
                   {filterInputValue ? (
@@ -286,7 +302,7 @@ export default function ProjectPage() {
                     ) : rows.length === 0 ? (
                       <tr>
                         <td colSpan={Math.max(fields.length, 1)} className="px-3 py-4 text-center text-muted-foreground">
-                          Chưa có dữ liệu.
+                          No data available.
                         </td>
                       </tr>
                     ) : (
@@ -337,9 +353,9 @@ export default function ProjectPage() {
             {selectedRow ? (
               <aside className="sticky top-6 w-[360px] shrink-0 rounded-md border p-4">
                 <div className="mb-3 flex items-center justify-between gap-2">
-                  <h2 className="text-sm font-semibold">Row detail</h2>
-                  <Button type="button" variant="outline" size="sm" onClick={() => setSelectedRow(null)}>
-                    Close
+                  <h2 className="text-sm font-semibold">Detail</h2>
+                  <Button type="button" variant="ghost" size="icon-sm" aria-label="Close row detail" onClick={() => setSelectedRow(null)}>
+                    <X />
                   </Button>
                 </div>
 
@@ -356,14 +372,14 @@ export default function ProjectPage() {
           </div>
         </section>
       ) : (
-        <p>Không tìm thấy project.</p>
+        <p>Project not found.</p>
       )}
 
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit project</DialogTitle>
-            <DialogDescription>Cập nhật thông tin project.</DialogDescription>
+            <DialogDescription>Update project information.</DialogDescription>
           </DialogHeader>
 
           <Input

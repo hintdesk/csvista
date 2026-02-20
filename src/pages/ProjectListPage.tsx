@@ -58,7 +58,7 @@ export default function ProjectListPage() {
 
       <Card className="gap-0 overflow-hidden py-0">
         {projects.length === 0 ? (
-          <CardContent className="px-4 py-8 text-center text-sm text-muted-foreground">Chưa có project nào.</CardContent>
+          <CardContent className="px-4 py-8 text-center text-sm text-muted-foreground">No projects yet.</CardContent>
         ) : (
           projects.map((project) => (
             <Card
@@ -99,7 +99,7 @@ export default function ProjectListPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Create project</DialogTitle>
-            <DialogDescription>Nhập tên project mới của bạn.</DialogDescription>
+            <DialogDescription>Enter your new project name.</DialogDescription>
           </DialogHeader>
 
           <Input
