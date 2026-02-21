@@ -1,5 +1,5 @@
 import { type ChangeEvent, useEffect, useRef, useState } from 'react'
-import { FileSpreadsheet, Pencil, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, FileSpreadsheet, Pencil, X } from 'lucide-react'
 import { useParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from '@/components/ui/combobox'
@@ -170,6 +170,25 @@ export default function ProjectPage() {
     setIsEditDialogOpen(false)
   }
 
+  const onSortByField = (field: string) => {
+    if (sortField !== field) {
+      setSortField(field)
+      setSortDirection('asc')
+      setPage(1)
+      return
+    }
+
+    if (sortDirection === 'asc') {
+      setSortDirection('desc')
+      setPage(1)
+      return
+    }
+
+    setSortField('')
+    setSortDirection('asc')
+    setPage(1)
+  }
+
   return (
     <main className="flex min-h-screen w-full flex-col gap-4 p-6">
       {project ? (
@@ -189,53 +208,7 @@ export default function ProjectPage() {
             <input ref={fileInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={onImportCsv} />
           </div>
 
-          <div className="grid gap-3 md:grid-cols-2">
-            <div className="flex flex-col gap-2">
-              <p className="text-sm font-medium">Sort</p>
-              <div className="flex gap-2">
-                <Combobox
-                  value={sortField || null}
-                  onValueChange={(value) => {
-                    setSortField((value as string) ?? '')
-                    setPage(1)
-                  }}
-                >
-                  <ComboboxInput className="w-full" placeholder="None" disabled={fields.length === 0} readOnly />
-                  <ComboboxContent>
-                    <ComboboxEmpty>No fields available</ComboboxEmpty>
-                    <ComboboxList>
-                      <ComboboxItem value="">None</ComboboxItem>
-                      {fields.map((field) => (
-                        <ComboboxItem key={field} value={field}>
-                          {field}
-                        </ComboboxItem>
-                      ))}
-                    </ComboboxList>
-                  </ComboboxContent>
-                </Combobox>
-
-                <Combobox
-                  value={sortDirection === 'asc' ? 'Ascending' : 'Descending'}
-                  onValueChange={(value) => {
-                    if (!value) {
-                      return
-                    }
-
-                    setSortDirection(value === 'Ascending' ? 'asc' : 'desc')
-                    setPage(1)
-                  }}
-                >
-                  <ComboboxInput className="w-[180px]" disabled={fields.length === 0 || !sortField} readOnly />
-                  <ComboboxContent>
-                    <ComboboxList>
-                      <ComboboxItem value="Ascending">Ascending</ComboboxItem>
-                      <ComboboxItem value="Descending">Descending</ComboboxItem>
-                    </ComboboxList>
-                  </ComboboxContent>
-                </Combobox>
-              </div>
-            </div>
-
+          <div className="grid gap-3">
             <div className="flex flex-col gap-2">
               <p className="text-sm font-medium">Filter</p>
               <div className="flex gap-2">
@@ -307,9 +280,20 @@ export default function ProjectPage() {
                     <TableRow>
                       {fields.map((field) => (
                         <TableHead key={field} className="w-56 max-w-56 px-3 py-2">
-                          <div className="truncate" title={field}>
-                            {field}
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() => onSortByField(field)}
+                            className="flex w-full items-center justify-between gap-2 text-left"
+                            aria-label={`Sort by ${field}`}
+                          >
+                            <span className="truncate" title={field}>
+                              {field}
+                            </span>
+                            <span className="flex items-center gap-0.5">
+                              <ArrowUp className={`size-4 ${sortField === field && sortDirection === 'asc' ? 'text-foreground' : 'text-muted-foreground'}`} />
+                              <ArrowDown className={`size-4 ${sortField === field && sortDirection === 'desc' ? 'text-foreground' : 'text-muted-foreground'}`} />
+                            </span>
+                          </button>
                         </TableHead>
                       ))}
                     </TableRow>
