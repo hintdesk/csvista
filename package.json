@@ -14,7 +14,7 @@
     "@tailwindcss/vite": "^4.2.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "idb": "^8.0.3",
+    "dexie": "^4.3.0",
     "lucide-react": "^0.575.0",
     "papaparse": "^5.5.3",
     "radix-ui": "^1.4.3",

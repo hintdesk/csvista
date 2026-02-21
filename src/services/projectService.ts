@@ -1,4 +1,4 @@
-import { openDB, type IDBPDatabase } from 'idb'
+import { db, type ProjectEntity } from './db'
 
 export type Project = {
   id: string
@@ -7,66 +7,12 @@ export type Project = {
   updatedAt: string
 }
 
-const DATABASE_NAME = 'csvista'
-const PROJECTS_STORE_NAME = 'projects'
-let dbPromise: Promise<IDBPDatabase> | null = null
-
-function getDb() {
-  if (!dbPromise) {
-    dbPromise = openDB(DATABASE_NAME, undefined, {
-      blocking() {
-        dbPromise = null
-      },
-      terminated() {
-        dbPromise = null
-      },
-    })
-  }
-
-  return dbPromise
-}
-
-function releaseDb(db: IDBPDatabase) {
-  db.close()
-  dbPromise = null
-}
-
-async function ensureProjectsStore() {
-  const db = await getDb()
-  if (db.objectStoreNames.contains(PROJECTS_STORE_NAME)) {
-    return db
-  }
-
-  const nextVersion = db.version + 1
-  db.close()
-  dbPromise = null
-
-  dbPromise = openDB(DATABASE_NAME, nextVersion, {
-    upgrade(upgradeDb) {
-      if (!upgradeDb.objectStoreNames.contains(PROJECTS_STORE_NAME)) {
-        upgradeDb.createObjectStore(PROJECTS_STORE_NAME, { keyPath: 'id' })
-      }
-    },
-    blocked() {
-      dbPromise = null
-    },
-    blocking() {
-      dbPromise = null
-    },
-    terminated() {
-      dbPromise = null
-    },
-  })
-
-  return dbPromise
-}
-
 function normalizeProject(item: unknown): Project | null {
   if (typeof item !== 'object' || item === null) {
     return null
   }
 
-  const project = item as Partial<Project>
+  const project = item as Partial<ProjectEntity>
   const id = typeof project.id === 'string' && project.id.trim() ? project.id : crypto.randomUUID()
   const createdAt = typeof project.createdAt === 'string' && project.createdAt ? project.createdAt : new Date().toISOString()
 
@@ -84,25 +30,13 @@ function sortProjectsByUpdatedAt(projects: Project[]) {
 
 export const projectService = {
   async getProjects(): Promise<Project[]> {
-    const db = await ensureProjectsStore()
-
-    try {
-      const projects = await db.getAll(PROJECTS_STORE_NAME)
-      return sortProjectsByUpdatedAt(projects.map(normalizeProject).filter((item): item is Project => item !== null))
-    } finally {
-      releaseDb(db)
-    }
+    const projects = await db.projects.toArray()
+    return sortProjectsByUpdatedAt(projects.map(normalizeProject).filter((item): item is Project => item !== null))
   },
 
   async getProjectById(id: string): Promise<Project | undefined> {
-    const db = await ensureProjectsStore()
-
-    try {
-      const project = await db.get(PROJECTS_STORE_NAME, id)
-      return normalizeProject(project) ?? undefined
-    } finally {
-      releaseDb(db)
-    }
+    const project = await db.projects.get(id)
+    return normalizeProject(project) ?? undefined
   },
 
   async createProject(name: string): Promise<Project> {
@@ -117,24 +51,12 @@ export const projectService = {
       updatedAt: now,
     }
 
-    const db = await ensureProjectsStore()
-
-    try {
-      await db.put(PROJECTS_STORE_NAME, project)
-      return project
-    } finally {
-      releaseDb(db)
-    }
+    await db.projects.put(project)
+    return project
   },
 
   async deleteProject(id: string): Promise<Project[]> {
-    const db = await ensureProjectsStore()
-
-    try {
-      await db.delete(PROJECTS_STORE_NAME, id)
-    } finally {
-      releaseDb(db)
-    }
+    await db.projects.delete(id)
 
     return this.getProjects()
   },
@@ -145,25 +67,19 @@ export const projectService = {
       return undefined
     }
 
-    const db = await ensureProjectsStore()
-
-    try {
-      const existingProject = normalizeProject(await db.get(PROJECTS_STORE_NAME, id))
-      if (!existingProject) {
-        return undefined
-      }
-
-      const updatedProject: Project = {
-        ...existingProject,
-        name: nextName,
-        updatedAt: new Date().toISOString(),
-      }
-
-      await db.put(PROJECTS_STORE_NAME, updatedProject)
-      return updatedProject
-    } finally {
-      releaseDb(db)
+    const existingProject = normalizeProject(await db.projects.get(id))
+    if (!existingProject) {
+      return undefined
     }
+
+    const updatedProject: Project = {
+      ...existingProject,
+      name: nextName,
+      updatedAt: new Date().toISOString(),
+    }
+
+    await db.projects.put(updatedProject)
+    return updatedProject
   },
 
   async loadProject(id: string): Promise<Project | undefined> {
