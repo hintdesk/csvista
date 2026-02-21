@@ -180,8 +180,16 @@ export const dataService = {
   },
 
   async queryProjectRows(projectId: string, params: QueryProjectRowsParams): Promise<QueryProjectRowsResult> {
-    await ensureProjectStore(projectId)
     const db = await getDb()
+    if (!db.objectStoreNames.contains(projectId)) {
+      return {
+        rows: [],
+        fields: [],
+        total: 0,
+        sql: buildSqlLikeQuery(projectId, params),
+      }
+    }
+
     const rawRows = await db.getAll(projectId)
     const rows = rawRows.map((row) => {
       const nextRow: Record<string, string> = {}
