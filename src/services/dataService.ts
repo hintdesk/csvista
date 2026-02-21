@@ -22,7 +22,13 @@ export type QueryProjectRowsResult = {
   sql: string
 }
 
+type ProjectRowsCacheEntry = {
+  rows: Record<string, string>[]
+  fields: string[]
+}
+
 let dbPromise: Promise<IDBPDatabase> | null = null
+const projectRowsCache = new Map<string, ProjectRowsCacheEntry>()
 
 function getDb(version?: number, storeToCreate?: string) {
   if (!dbPromise || version !== undefined) {
@@ -148,6 +154,48 @@ function sortRows(rows: Record<string, string>[], field: string, direction: Sort
   })
 }
 
+function sanitizeStoredRows(rawRows: unknown[]): Record<string, string>[] {
+  return rawRows.map((row) => {
+    const nextRow: Record<string, string> = {}
+    if (typeof row !== 'object' || row === null) {
+      return nextRow
+    }
+
+    for (const [key, value] of Object.entries(row)) {
+      if (key === 'id') {
+        continue
+      }
+
+      nextRow[key] = value == null ? '' : String(value)
+    }
+
+    return nextRow
+  })
+}
+
+async function loadAndCacheProjectRows(projectId: string): Promise<ProjectRowsCacheEntry> {
+  const db = await getDb()
+  if (!db.objectStoreNames.contains(projectId)) {
+    const emptyEntry: ProjectRowsCacheEntry = {
+      rows: [],
+      fields: [],
+    }
+    projectRowsCache.set(projectId, emptyEntry)
+    return emptyEntry
+  }
+
+  const rawRows = await db.getAll(projectId)
+  const rows = sanitizeStoredRows(rawRows)
+  const fields = rows.length > 0 ? Object.keys(rows[0]) : []
+  const cacheEntry: ProjectRowsCacheEntry = {
+    rows,
+    fields,
+  }
+  projectRowsCache.set(projectId, cacheEntry)
+
+  return cacheEntry
+}
+
 export const dataService = {
   async importCsv(projectId: string, csvText: string): Promise<{ totalRows: number; fields: string[] }> {
     await ensureProjectStore(projectId)
@@ -173,6 +221,11 @@ export const dataService = {
     }
 
     await transaction.done
+    projectRowsCache.set(projectId, {
+      rows,
+      fields,
+    })
+
     return {
       totalRows: rows.length,
       fields,
@@ -180,31 +233,9 @@ export const dataService = {
   },
 
   async queryProjectRows(projectId: string, params: QueryProjectRowsParams): Promise<QueryProjectRowsResult> {
-    const db = await getDb()
-    if (!db.objectStoreNames.contains(projectId)) {
-      return {
-        rows: [],
-        fields: [],
-        total: 0,
-        sql: buildSqlLikeQuery(projectId, params),
-      }
-    }
-
-    const rawRows = await db.getAll(projectId)
-    const rows = rawRows.map((row) => {
-      const nextRow: Record<string, string> = {}
-      for (const [key, value] of Object.entries(row)) {
-        if (key === 'id') {
-          continue
-        }
-
-        nextRow[key] = value == null ? '' : String(value)
-      }
-
-      return nextRow
-    })
-
-    const fields = rows.length > 0 ? Object.keys(rows[0]) : []
+    const cachedEntry = projectRowsCache.get(projectId) ?? (await loadAndCacheProjectRows(projectId))
+    const rows = cachedEntry.rows
+    const fields = cachedEntry.fields
     const normalizedFilterValue = params.filterValue?.trim() ?? ''
 
     let processedRows = rows
@@ -232,5 +263,6 @@ export const dataService = {
 
   async deleteProjectTable(projectId: string): Promise<void> {
     await deleteProjectStore(projectId)
+    projectRowsCache.delete(projectId)
   },
 }
