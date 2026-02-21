@@ -6,6 +6,7 @@ import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, 
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Textarea } from '@/components/ui/textarea'
 import { dataService, type SortDirection } from '@/services/dataService'
 import { type Project, projectService } from '@/services/projectService'
 
@@ -27,6 +28,7 @@ export default function ProjectPage() {
   const [selectedRow, setSelectedRow] = useState<Record<string, string> | null>(null)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [editProjectName, setEditProjectName] = useState('')
+  const [editProjectDescription, setEditProjectDescription] = useState('')
   const [isLoadingRows, setIsLoadingRows] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
@@ -48,6 +50,7 @@ export default function ProjectPage() {
 
       setProject(loadedProject)
       setEditProjectName(loadedProject?.name ?? '')
+      setEditProjectDescription(loadedProject?.description ?? '')
     }
 
     void loadProject()
@@ -148,12 +151,14 @@ export default function ProjectPage() {
     }
 
     setEditProjectName(project.name)
+    setEditProjectDescription(project.description)
     setIsEditDialogOpen(true)
   }
 
   const onCancelEditProject = () => {
     setIsEditDialogOpen(false)
     setEditProjectName(project?.name ?? '')
+    setEditProjectDescription(project?.description ?? '')
   }
 
   const onSaveEditProject = async () => {
@@ -161,7 +166,10 @@ export default function ProjectPage() {
       return
     }
 
-    const updatedProject = await projectService.updateProject(project.id, { name: editProjectName })
+    const updatedProject = await projectService.updateProject(project.id, {
+      name: editProjectName,
+      description: editProjectDescription,
+    })
     if (!updatedProject) {
       return
     }
@@ -194,7 +202,10 @@ export default function ProjectPage() {
       {project ? (
         <section className="flex flex-col gap-4">
           <header className="flex items-center gap-2">
-            <h1 className="text-2xl font-semibold">{project.name}</h1>
+            <div className="flex flex-col gap-1">
+              <h1 className="text-2xl font-semibold">{project.name}</h1>
+              {project.description ? <p className="text-sm text-muted-foreground">{project.description}</p> : null}
+            </div>
             <Button type="button" variant="ghost" size="icon-sm" aria-label="Edit project" onClick={onOpenEditDialog}>
               <Pencil />
             </Button>
@@ -402,6 +413,8 @@ export default function ProjectPage() {
             }}
             autoFocus
           />
+
+          <Textarea placeholder="Description" value={editProjectDescription} onChange={(event) => setEditProjectDescription(event.target.value)} />
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onCancelEditProject}>

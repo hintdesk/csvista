@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { dataService } from '@/services/dataService'
 import { type Project, projectService } from '@/services/projectService'
 
@@ -13,6 +14,7 @@ export default function ProjectListPage() {
   const [projects, setProjects] = useState<Project[]>([])
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [newProjectName, setNewProjectName] = useState('')
+  const [newProjectDescription, setNewProjectDescription] = useState('')
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [pendingDeleteProject, setPendingDeleteProject] = useState<Project | null>(null)
 
@@ -78,6 +80,7 @@ export default function ProjectListPage() {
   const onCancelCreateProject = () => {
     setIsCreateDialogOpen(false)
     setNewProjectName('')
+    setNewProjectDescription('')
   }
 
   const onSaveCreateProject = async () => {
@@ -86,10 +89,14 @@ export default function ProjectListPage() {
       return
     }
 
-    await projectService.createProject(trimmedName)
+    await projectService.createProject({
+      name: trimmedName,
+      description: newProjectDescription,
+    })
     setProjects(await projectService.getProjects())
     setIsCreateDialogOpen(false)
     setNewProjectName('')
+    setNewProjectDescription('')
   }
 
   return (
@@ -153,6 +160,8 @@ export default function ProjectListPage() {
             }}
             autoFocus
           />
+
+          <Textarea placeholder="Description" value={newProjectDescription} onChange={(event) => setNewProjectDescription(event.target.value)} />
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onCancelCreateProject}>

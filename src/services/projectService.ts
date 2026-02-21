@@ -3,6 +3,7 @@ import { openDB, type IDBPDatabase } from 'idb'
 export type Project = {
   id: string
   name: string
+  description: string
   createdAt: string
   updatedAt: string
 }
@@ -73,6 +74,7 @@ function normalizeProject(item: unknown): Project | null {
   return {
     id,
     name: typeof project.name === 'string' && project.name.trim() ? project.name : `Project ${id.slice(0, 8)}`,
+    description: typeof project.description === 'string' ? project.description : '',
     createdAt,
     updatedAt: typeof project.updatedAt === 'string' && project.updatedAt ? project.updatedAt : createdAt,
   }
@@ -105,14 +107,15 @@ export const projectService = {
     }
   },
 
-  async createProject(name: string): Promise<Project> {
+  async createProject(payload: { name: string; description: string }): Promise<Project> {
     const now = new Date().toISOString()
-    const sanitizedName = name.trim()
+    const sanitizedName = payload.name.trim()
     const projectName = sanitizedName || `Project ${new Date().toLocaleString()}`
 
     const project: Project = {
       id: crypto.randomUUID(),
       name: projectName,
+      description: payload.description.trim(),
       createdAt: now,
       updatedAt: now,
     }
@@ -139,7 +142,7 @@ export const projectService = {
     return this.getProjects()
   },
 
-  async updateProject(id: string, payload: { name: string }): Promise<Project | undefined> {
+  async updateProject(id: string, payload: { name: string; description: string }): Promise<Project | undefined> {
     const nextName = payload.name.trim()
     if (!nextName) {
       return undefined
@@ -156,6 +159,7 @@ export const projectService = {
       const updatedProject: Project = {
         ...existingProject,
         name: nextName,
+        description: payload.description.trim(),
         updatedAt: new Date().toISOString(),
       }
 
