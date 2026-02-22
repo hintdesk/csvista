@@ -22,13 +22,13 @@ export type QueryProjectRowsResult = {
   sql: string
 }
 
-type ProjectRowsCacheEntry = {
+type CacheInfo = {
   rows: Record<string, string>[]
   fields: string[]
 }
 
 let dbPromise: Promise<IDBPDatabase> | null = null
-const projectRowsCache = new Map<string, ProjectRowsCacheEntry>()
+let cache: CacheInfo | null = null
 
 function getDb(version?: number, storeToCreate?: string) {
   if (!dbPromise || version !== undefined) {
@@ -173,25 +173,25 @@ function sanitizeStoredRows(rawRows: unknown[]): Record<string, string>[] {
   })
 }
 
-async function loadAndCacheProjectRows(projectId: string): Promise<ProjectRowsCacheEntry> {
+async function load(projectId: string): Promise<CacheInfo> {
   const db = await getDb()
   if (!db.objectStoreNames.contains(projectId)) {
-    const emptyEntry: ProjectRowsCacheEntry = {
+    const emptyEntry: CacheInfo = {
       rows: [],
       fields: [],
     }
-    projectRowsCache.set(projectId, emptyEntry)
+    cache = emptyEntry
     return emptyEntry
   }
 
   const rawRows = await db.getAll(projectId)
   const rows = sanitizeStoredRows(rawRows)
   const fields = rows.length > 0 ? Object.keys(rows[0]) : []
-  const cacheEntry: ProjectRowsCacheEntry = {
+  const cacheEntry: CacheInfo = {
     rows,
     fields,
   }
-  projectRowsCache.set(projectId, cacheEntry)
+  cache = cacheEntry
 
   return cacheEntry
 }
@@ -221,10 +221,10 @@ export const dataService = {
     }
 
     await transaction.done
-    projectRowsCache.set(projectId, {
+    cache = {
       rows,
       fields,
-    })
+    }
 
     return {
       totalRows: rows.length,
@@ -232,8 +232,8 @@ export const dataService = {
     }
   },
 
-  async queryProjectRows(projectId: string, params: QueryProjectRowsParams): Promise<QueryProjectRowsResult> {
-    const cachedEntry = projectRowsCache.get(projectId) ?? (await loadAndCacheProjectRows(projectId))
+  async search(projectId: string, params: QueryProjectRowsParams): Promise<QueryProjectRowsResult> {
+    const cachedEntry = cache ?? (await load(projectId))
     const rows = cachedEntry.rows
     const fields = cachedEntry.fields
     const normalizedFilterValue = params.filterValue?.trim() ?? ''
@@ -263,6 +263,10 @@ export const dataService = {
 
   async deleteProjectTable(projectId: string): Promise<void> {
     await deleteProjectStore(projectId)
-    projectRowsCache.delete(projectId)
+    cache = null
+  },
+
+  clearCache(): void {
+    cache = null
   },
 }

@@ -2,6 +2,7 @@ import { Link, Route, Routes, matchPath, useLocation } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import ProjectListPage from '@/pages/ProjectListPage'
 import ProjectPage from '@/pages/ProjectPage'
+import { dataService } from '@/services/dataService'
 import { type Project, projectService } from '@/services/projectService'
 import csvFileLogo from '@/assets/csv-file.png'
 
@@ -10,6 +11,10 @@ function App() {
   const projectMatch = matchPath('/project/:id', location.pathname)
   const currentProjectId = projectMatch?.params.id
   const [currentProject, setCurrentProject] = useState<Project | undefined>()
+
+  useEffect(() => {
+    dataService.clearCache()
+  }, [currentProjectId])
 
   useEffect(() => {
     if (!currentProjectId) {

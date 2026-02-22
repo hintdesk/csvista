@@ -72,7 +72,7 @@ export default function ProjectPage() {
       setErrorMessage('')
 
       try {
-        const result = await dataService.queryProjectRows(project.id, {
+        const result = await dataService.search(project.id, {
           page,
           pageSize: PAGE_SIZE,
           sortField: sortField || undefined,
