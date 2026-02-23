@@ -1,5 +1,6 @@
 import { Link, Route, Routes, matchPath, useLocation } from 'react-router-dom'
 import { useEffect, useState } from 'react'
+import ChartPage from '@/pages/ChartPage'
 import ProjectListPage from '@/pages/ProjectListPage'
 import ProjectPage from '@/pages/ProjectPage'
 import { dataService } from '@/services/dataService'
@@ -8,7 +9,7 @@ import csvFileLogo from '@/assets/csv-file.png'
 
 function App() {
   const location = useLocation()
-  const projectMatch = matchPath('/project/:id', location.pathname)
+  const projectMatch = matchPath('/project/:id/*', location.pathname)
   const currentProjectId = projectMatch?.params.id
   const [currentProject, setCurrentProject] = useState<Project | undefined>()
 
@@ -56,7 +57,23 @@ function App() {
               Projects
             </Link>
             <span>→</span>
-            <span>{currentProject?.name ?? currentProjectId}</span>
+            <Link to={`/project/${currentProjectId}`} className="text-foreground hover:underline">
+              {currentProject?.name ?? currentProjectId}
+            </Link>
+            <span>→</span>
+            <Link
+              to={`/project/${currentProjectId}`}
+              className={location.pathname === `/project/${currentProjectId}` ? 'text-foreground' : 'hover:underline'}
+            >
+              Data
+            </Link>
+            <span>•</span>
+            <Link
+              to={`/project/${currentProjectId}/charts`}
+              className={location.pathname === `/project/${currentProjectId}/charts` ? 'text-foreground' : 'hover:underline'}
+            >
+              Charts
+            </Link>
           </nav>
         </div>
       ) : null}
@@ -64,6 +81,7 @@ function App() {
       <Routes>
         <Route path="/" element={<ProjectListPage />} />
         <Route path="/project/:id" element={<ProjectPage />} />
+        <Route path="/project/:id/charts" element={<ChartPage />} />
       </Routes>
     </div>
   )

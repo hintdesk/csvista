@@ -1,74 +1,21 @@
-import { type ChangeEvent, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowDown, ArrowUp, FileSpreadsheet, Pencil, Plus, Trash2, X } from 'lucide-react'
-import { Bar, BarChart, CartesianGrid, LabelList, XAxis, YAxis } from 'recharts'
+import { type ChangeEvent, useEffect, useRef, useState } from 'react'
+import { ArrowDown, ArrowUp, FileSpreadsheet, Pencil, X } from 'lucide-react'
 import { useParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
 import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from '@/components/ui/combobox'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
 import { dataService, type SortDirection } from '@/services/dataService'
-import { type Project, type ProjectChart, projectService } from '@/services/projectService'
+import { type Project, projectService } from '@/services/projectService'
 
 const PAGE_SIZE = 10
-
-type AddedChart = ProjectChart
-
-const barChartConfig = {
-  count: {
-    label: 'Count',
-    color: 'hsl(var(--chart-1))',
-  },
-} satisfies ChartConfig
-
-function createChartId() {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID()
-  }
-
-  return `${Date.now()}-${Math.random().toString(36).slice(2)}`
-}
-
-function buildFieldCountChartData(rows: Record<string, string>[], field: string) {
-  const counts = new Map<string, number>()
-
-  for (const row of rows) {
-    const rawValue = (row[field] ?? '').trim()
-    const value = rawValue || '(Empty)'
-    counts.set(value, (counts.get(value) ?? 0) + 1)
-  }
-
-  return [...counts.entries()]
-    .map(([value, count]) => ({ value, count }))
-    .sort((left, right) => {
-      if (right.count !== left.count) {
-        return right.count - left.count
-      }
-
-      return left.value.localeCompare(right.value, undefined, { sensitivity: 'base' })
-    })
-}
-
-function truncateCategoryLabel(value: string) {
-  return value.slice(0, 20)
-}
-
-function getChartHeight(categoryCount: number) {
-  const minHeight = 320
-  const rowHeight = 30
-  const topBottomPadding = 24
-
-  return Math.max(minHeight, categoryCount * rowHeight + topBottomPadding)
-}
 
 export default function ProjectPage() {
   const { id = '' } = useParams()
   const [project, setProject] = useState<Project | undefined>()
   const [rows, setRows] = useState<Record<string, string>[]>([])
-  const [filteredRows, setFilteredRows] = useState<Record<string, string>[]>([])
   const [fields, setFields] = useState<string[]>([])
   const [totalRows, setTotalRows] = useState(0)
   const [page, setPage] = useState(1)
@@ -86,11 +33,6 @@ export default function ProjectPage() {
   const [isImporting, setIsImporting] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [refreshKey, setRefreshKey] = useState(0)
-  const [charts, setCharts] = useState<AddedChart[]>([])
-  const [isChartDialogOpen, setIsChartDialogOpen] = useState(false)
-  const [chartDialogMode, setChartDialogMode] = useState<'create' | 'edit'>('create')
-  const [selectedChartField, setSelectedChartField] = useState('')
-  const [activeChartId, setActiveChartId] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -109,7 +51,6 @@ export default function ProjectPage() {
       setProject(loadedProject)
       setEditProjectName(loadedProject?.name ?? '')
       setEditProjectDescription(loadedProject?.description ?? '')
-      setCharts(loadedProject?.charts ?? [])
     }
 
     void loadProject()
@@ -132,32 +73,24 @@ export default function ProjectPage() {
       setErrorMessage('')
 
       try {
-        const [result, nextFilteredRows] = await Promise.all([
-          dataService.search(projectId, {
-            page,
-            pageSize: PAGE_SIZE,
-            sortField: sortField || undefined,
-            sortDirection,
-            filterField: filterField || undefined,
-            filterValue: appliedFilterValue || undefined,
-          }),
-          dataService.getFilteredRows(projectId, {
-            filterField: filterField || undefined,
-            filterValue: appliedFilterValue || undefined,
-          }),
-        ])
+        const result = await dataService.search(projectId, {
+          page,
+          pageSize: PAGE_SIZE,
+          sortField: sortField || undefined,
+          sortDirection,
+          filterField: filterField || undefined,
+          filterValue: appliedFilterValue || undefined,
+        })
 
         if (isCancelled) {
           return
         }
 
         setRows(result.rows)
-        setFilteredRows(nextFilteredRows)
         setFields(result.fields)
         setTotalRows(result.total)
         setSqlPreview(result.sql)
         setSelectedRow(null)
-        setCharts((previous) => previous.filter((chart) => result.fields.includes(chart.field)))
       } catch (error) {
         if (isCancelled) {
           return
@@ -198,7 +131,6 @@ export default function ProjectPage() {
       const importResult = await dataService.importCsv(project.id, csvText)
 
       setFields(importResult.fields)
-      setFilteredRows([])
       setSortField('')
       setFilterField('')
       setFilterInputValue('')
@@ -266,81 +198,6 @@ export default function ProjectPage() {
     setPage(1)
   }
 
-  const onOpenAddChartDialog = () => {
-    if (fields.length === 0) {
-      return
-    }
-
-    setChartDialogMode('create')
-    setActiveChartId(null)
-    setSelectedChartField(fields[0] ?? '')
-    setIsChartDialogOpen(true)
-  }
-
-  const onOpenEditChartDialog = (chart: AddedChart) => {
-    setChartDialogMode('edit')
-    setActiveChartId(chart.id)
-    setSelectedChartField(chart.field)
-    setIsChartDialogOpen(true)
-  }
-
-  const onDeleteChart = (chartId: string) => {
-    setCharts((previous) => {
-      const nextCharts = previous.filter((chart) => chart.id !== chartId)
-
-      if (project) {
-        void projectService.updateProjectCharts(project.id, nextCharts)
-      }
-
-      return nextCharts
-    })
-  }
-
-  const onSaveChart = () => {
-    if (!selectedChartField) {
-      return
-    }
-
-    if (!project) {
-      return
-    }
-
-    if (chartDialogMode === 'create') {
-      setCharts((previous) => {
-        const nextCharts = [...previous, { id: createChartId(), field: selectedChartField }]
-
-        void projectService.updateProjectCharts(project.id, nextCharts)
-
-        return nextCharts
-      })
-      setIsChartDialogOpen(false)
-      return
-    }
-
-    if (!activeChartId) {
-      return
-    }
-
-    setCharts((previous) => {
-      const nextCharts = previous.map((chart) => (chart.id === activeChartId ? { ...chart, field: selectedChartField } : chart))
-
-      void projectService.updateProjectCharts(project.id, nextCharts)
-
-      return nextCharts
-    })
-    setIsChartDialogOpen(false)
-  }
-
-  const chartDataById = useMemo(() => {
-    const next = new Map<string, Array<{ value: string; count: number }>>()
-
-    for (const chart of charts) {
-      next.set(chart.id, buildFieldCountChartData(filteredRows, chart.field))
-    }
-
-    return next
-  }, [charts, filteredRows])
-
   return (
     <main className="flex min-h-screen w-full flex-col gap-4 p-6">
       {project ? (
@@ -356,10 +213,6 @@ export default function ProjectPage() {
           </header>
 
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={onOpenAddChartDialog} disabled={fields.length === 0} aria-label="Add chart">
-              <Plus />
-              <span>Add chart</span>
-            </Button>
             <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={isImporting} aria-label="Import data">
               <FileSpreadsheet />
               <span>Import</span>
@@ -538,105 +391,10 @@ export default function ProjectPage() {
               </aside>
             ) : null}
           </div>
-
-          {charts.length > 0 ? (
-            <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              {charts.map((chart) => {
-                const chartData = chartDataById.get(chart.id) ?? []
-
-                return (
-                  <Card key={chart.id} className="gap-3 py-4">
-                    <CardHeader className="flex flex-row items-start justify-between gap-3 px-4">
-                      <div className="space-y-1">
-                        <CardTitle>{chart.field}</CardTitle>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button type="button" size="xs" variant="outline" onClick={() => onOpenEditChartDialog(chart)}>
-                          <Pencil />
-                          Edit
-                        </Button>
-                        <Button type="button" size="xs" variant="outline" onClick={() => onDeleteChart(chart.id)}>
-                          <Trash2 />
-                          Delete
-                        </Button>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="px-4">
-                      {chartData.length > 0 ? (
-                        <ChartContainer config={barChartConfig} className="w-full aspect-auto" style={{ height: `${getChartHeight(chartData.length)}px` }}>
-                          <BarChart data={chartData} layout="vertical" margin={{ top: 8, right: 44, bottom: 8, left: 16 }}>
-                            <CartesianGrid horizontal={false} />
-                            <XAxis type="number" dataKey="count" allowDecimals={false} />
-                            <YAxis type="category" dataKey="value" width={120} interval={0} tickFormatter={truncateCategoryLabel} />
-                            <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="line" />} />
-                            <Bar dataKey="count" fill="var(--color-count)" radius={4}>
-                              <LabelList dataKey="count" position="right" className="fill-foreground text-xs" />
-                            </Bar>
-                          </BarChart>
-                        </ChartContainer>
-                      ) : (
-                        <p className="text-sm text-muted-foreground">No data available for this chart.</p>
-                      )}
-                    </CardContent>
-                  </Card>
-                )
-              })}
-            </section>
-          ) : null}
         </section>
       ) : (
         <p>Project not found.</p>
       )}
-
-      <Dialog
-        modal={false}
-        open={isChartDialogOpen}
-        onOpenChange={(nextOpen) => {
-          setIsChartDialogOpen(nextOpen)
-          if (!nextOpen) {
-            setSelectedChartField('')
-            setActiveChartId(null)
-          }
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{chartDialogMode === 'create' ? 'Add chart' : 'Edit chart'}</DialogTitle>
-            <DialogDescription>Select a field for the horizontal bar chart.</DialogDescription>
-          </DialogHeader>
-
-          <Combobox value={selectedChartField || null} onValueChange={(value) => setSelectedChartField((value as string) ?? '')}>
-            <ComboboxInput className="w-full" placeholder="Select field" readOnly />
-            <ComboboxContent>
-              <ComboboxEmpty>No fields available</ComboboxEmpty>
-              <ComboboxList>
-                {fields.map((field) => (
-                  <ComboboxItem key={field} value={field}>
-                    {field}
-                  </ComboboxItem>
-                ))}
-              </ComboboxList>
-            </ComboboxContent>
-          </Combobox>
-
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setIsChartDialogOpen(false)
-                setSelectedChartField('')
-                setActiveChartId(null)
-              }}
-            >
-              Cancel
-            </Button>
-            <Button type="button" onClick={onSaveChart} disabled={!selectedChartField}>
-              Save
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent>
