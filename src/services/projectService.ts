@@ -6,6 +6,12 @@ export type Project = {
   description: string
   createdAt: string
   updatedAt: string
+  charts: ProjectChart[]
+}
+
+export type ProjectChart = {
+  id: string
+  field: string
 }
 
 const DATABASE_NAME = 'csvista'
@@ -70,6 +76,15 @@ function normalizeProject(item: unknown): Project | null {
   const project = item as Partial<Project>
   const id = typeof project.id === 'string' && project.id.trim() ? project.id : crypto.randomUUID()
   const createdAt = typeof project.createdAt === 'string' && project.createdAt ? project.createdAt : new Date().toISOString()
+  const charts = Array.isArray(project.charts)
+    ? project.charts
+        .filter((chart): chart is ProjectChart => typeof chart === 'object' && chart !== null)
+        .map((chart) => ({
+          id: typeof chart.id === 'string' && chart.id.trim() ? chart.id : crypto.randomUUID(),
+          field: typeof chart.field === 'string' ? chart.field : '',
+        }))
+        .filter((chart) => chart.field.trim().length > 0)
+    : []
 
   return {
     id,
@@ -77,6 +92,7 @@ function normalizeProject(item: unknown): Project | null {
     description: typeof project.description === 'string' ? project.description : '',
     createdAt,
     updatedAt: typeof project.updatedAt === 'string' && project.updatedAt ? project.updatedAt : createdAt,
+    charts,
   }
 }
 
@@ -118,6 +134,7 @@ export const projectService = {
       description: payload.description.trim(),
       createdAt: now,
       updatedAt: now,
+      charts: [],
     }
 
     const db = await ensureProjectsStore()
@@ -176,5 +193,34 @@ export const projectService = {
       return undefined
     }
     return project
+  },
+
+  async updateProjectCharts(id: string, charts: ProjectChart[]): Promise<Project | undefined> {
+    const db = await ensureProjectsStore()
+
+    try {
+      const existingProject = normalizeProject(await db.get(PROJECTS_STORE_NAME, id))
+      if (!existingProject) {
+        return undefined
+      }
+
+      const normalizedCharts = charts
+        .filter((chart) => chart.field.trim().length > 0)
+        .map((chart) => ({
+          id: chart.id,
+          field: chart.field,
+        }))
+
+      const updatedProject: Project = {
+        ...existingProject,
+        charts: normalizedCharts,
+        updatedAt: new Date().toISOString(),
+      }
+
+      await db.put(PROJECTS_STORE_NAME, updatedProject)
+      return updatedProject
+    } finally {
+      releaseDb(db)
+    }
   },
 }

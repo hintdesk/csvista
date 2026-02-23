@@ -15,6 +15,11 @@ export type QueryProjectRowsParams = {
   filterValue?: string
 }
 
+export type QueryFilteredRowsParams = {
+  filterField?: string
+  filterValue?: string
+}
+
 export type QueryProjectRowsResult = {
   rows: Record<string, string>[]
   fields: string[]
@@ -259,6 +264,19 @@ export const dataService = {
       total: processedRows.length,
       sql: buildSqlLikeQuery(projectId, params),
     }
+  },
+
+  async getFilteredRows(projectId: string, params: QueryFilteredRowsParams): Promise<Record<string, string>[]> {
+    const cachedEntry = cache ?? (await load(projectId))
+    const rows = cachedEntry.rows
+    const normalizedFilterValue = params.filterValue?.trim() ?? ''
+
+    if (params.filterField && normalizedFilterValue) {
+      const queryText = normalizedFilterValue.toLocaleLowerCase()
+      return rows.filter((row) => (row[params.filterField!] ?? '').toLocaleLowerCase().includes(queryText))
+    }
+
+    return rows
   },
 
   async deleteProjectTable(projectId: string): Promise<void> {
