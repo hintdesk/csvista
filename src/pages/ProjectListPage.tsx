@@ -51,7 +51,7 @@ export default function ProjectListPage() {
       return
     }
 
-    await dataService.deleteProjectTable(pendingDeleteProject.id)
+    await dataService.delete(pendingDeleteProject.id)
     const nextProjects = await projectService.deleteProject(pendingDeleteProject.id)
     setProjects(nextProjects)
     setPendingDeleteProject(null)

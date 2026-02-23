@@ -79,40 +79,6 @@ async function ensureProjectStore(projectId: string): Promise<void> {
   })
 }
 
-async function deleteProjectStore(projectId: string): Promise<void> {
-  const db = await getDb()
-  if (!db.objectStoreNames.contains(projectId)) {
-    return
-  }
-
-  const nextVersion = db.version + 1
-  db.close()
-  dbPromise = null
-
-  dbPromise = openDB(DATABASE_NAME, nextVersion, {
-    upgrade(upgradeDb) {
-      if (!upgradeDb.objectStoreNames.contains(PROJECTS_STORE_NAME)) {
-        upgradeDb.createObjectStore(PROJECTS_STORE_NAME, { keyPath: 'id' })
-      }
-
-      if (upgradeDb.objectStoreNames.contains(projectId)) {
-        upgradeDb.deleteObjectStore(projectId)
-      }
-    },
-    blocked() {
-      dbPromise = null
-    },
-    blocking() {
-      dbPromise = null
-    },
-    terminated() {
-      dbPromise = null
-    },
-  })
-
-  await dbPromise
-}
-
 function normalizeCsvRows(rows: unknown[]): Record<string, string>[] {
   return rows
     .filter((row): row is Record<string, unknown> => typeof row === 'object' && row !== null)
@@ -266,7 +232,7 @@ export const dataService = {
     }
   },
 
-  async getFilteredRows(projectId: string, params: QueryFilteredRowsParams): Promise<Record<string, string>[]> {
+  async filter(projectId: string, params: QueryFilteredRowsParams): Promise<Record<string, string>[]> {
     const cachedEntry = cache ?? (await load(projectId))
     const rows = cachedEntry.rows
     const normalizedFilterValue = params.filterValue?.trim() ?? ''
@@ -279,8 +245,38 @@ export const dataService = {
     return rows
   },
 
-  async deleteProjectTable(projectId: string): Promise<void> {
-    await deleteProjectStore(projectId)
+  async delete(projectId: string): Promise<void> {
+    const db = await getDb()
+    if (!db.objectStoreNames.contains(projectId)) {
+      return
+    }
+
+    const nextVersion = db.version + 1
+    db.close()
+    dbPromise = null
+
+    dbPromise = openDB(DATABASE_NAME, nextVersion, {
+      upgrade(upgradeDb) {
+        if (!upgradeDb.objectStoreNames.contains(PROJECTS_STORE_NAME)) {
+          upgradeDb.createObjectStore(PROJECTS_STORE_NAME, { keyPath: 'id' })
+        }
+
+        if (upgradeDb.objectStoreNames.contains(projectId)) {
+          upgradeDb.deleteObjectStore(projectId)
+        }
+      },
+      blocked() {
+        dbPromise = null
+      },
+      blocking() {
+        dbPromise = null
+      },
+      terminated() {
+        dbPromise = null
+      },
+    })
+
+    await dbPromise
     cache = null
   },
 

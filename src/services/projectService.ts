@@ -195,7 +195,7 @@ export const projectService = {
     return project
   },
 
-  async updateProjectCharts(id: string, charts: ProjectChart[]): Promise<Project | undefined> {
+  async setCharts(id: string, charts: ProjectChart[]): Promise<Project | undefined> {
     const db = await ensureProjectsStore()
 
     try {
