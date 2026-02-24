@@ -311,13 +311,11 @@ export default function ChartPage() {
                                         <CardTitle>{chart.field}</CardTitle>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        <Button type="button" size="xs" variant="outline" onClick={() => onOpenEditChartDialog(chart)}>
+                                        <Button type="button" size="icon-sm" variant="outline" onClick={() => onOpenEditChartDialog(chart)} aria-label="Edit chart">
                                             <Pencil />
-                                            Edit
                                         </Button>
-                                        <Button type="button" size="xs" variant="outline" onClick={() => onDeleteChart(chart.id)}>
+                                        <Button type="button" size="icon-sm" variant="outline" onClick={() => onDeleteChart(chart.id)} aria-label="Delete chart">
                                             <Trash2 />
-                                            Delete
                                         </Button>
                                     </div>
                                 </CardHeader>
@@ -329,7 +327,7 @@ export default function ChartPage() {
                                                 <XAxis type="number" dataKey="count" allowDecimals={false} />
                                                 <YAxis type="category" dataKey="value" width={120} interval={0} tickFormatter={truncateCategoryLabel} />
                                                 <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="line" />} />
-                                                <Bar dataKey="count" fill="var(--color-count)" radius={4}>
+                                                <Bar dataKey="count" fill="var(--color-count)" radius={[0, 4, 4, 0]}>
                                                     <LabelList dataKey="count" position="right" className="fill-foreground text-xs" />
                                                 </Bar>
                                             </BarChart>
