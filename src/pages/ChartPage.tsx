@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Pencil, Plus, Trash2, X } from 'lucide-react'
-import { Bar, BarChart, CartesianGrid, LabelList, XAxis, YAxis } from 'recharts'
+import { Bar, BarChart, CartesianGrid, Cell, LabelList, XAxis, YAxis } from 'recharts'
 import { useParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -14,7 +14,7 @@ import { type Project, type ProjectChart, projectService } from '@/services/proj
 const barChartConfig = {
     count: {
         label: 'Count',
-        color: 'hsl(var(--chart-1))',
+        color: 'var(--chart-1)',
     },
 } satisfies ChartConfig
 
@@ -56,6 +56,11 @@ function getChartHeight(categoryCount: number) {
     const topBottomPadding = 24
 
     return Math.max(minHeight, categoryCount * rowHeight + topBottomPadding)
+}
+
+function getChartBarColor(index: number) {
+    const token = (index % 10) + 1
+    return `var(--chart-${token})`
 }
 
 
@@ -325,7 +330,10 @@ export default function ChartPage() {
                                                 <XAxis type="number" dataKey="count" allowDecimals={false} />
                                                 <YAxis type="category" dataKey="value" width={120} interval={0} tickFormatter={truncateCategoryLabel} />
                                                 <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="line" />} />
-                                                <Bar dataKey="count" fill="var(--color-count)" radius={[0, 4, 4, 0]}>
+                                                <Bar dataKey="count" radius={[0, 4, 4, 0]}>
+                                                    {chartData.map((entry, index) => (
+                                                        <Cell key={`${entry.value}-${index}`} fill={getChartBarColor(index)} />
+                                                    ))}
                                                     <LabelList dataKey="count" position="right" className="fill-foreground text-xs" />
                                                 </Bar>
                                             </BarChart>
