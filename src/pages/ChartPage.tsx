@@ -227,9 +227,7 @@ export default function ChartPage() {
 
     return (
         <main className="flex min-h-screen w-full flex-col gap-4 p-6">
-            <section className="flex items-center justify-between gap-2">
-                <div className="flex flex-col gap-1">{project.description ? <p className="text-sm text-muted-foreground">{project.description}</p> : null}</div>
-
+            <section className="flex items-center justify-end gap-2">
                 <div className="flex items-center gap-2">
                     <Button type="button" variant="outline" size="sm" onClick={onOpenAddChartDialog} disabled={fields.length === 0} aria-label="Add chart">
                         <Plus />
