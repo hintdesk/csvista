@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { dataService, type SortDirection } from '@/services/dataService'
 import { type Project, projectService } from '@/services/projectService'
 
-const PAGE_SIZE = 10
+const PAGE_SIZE_OPTIONS = [10, 20, 50] as const
 
 export default function ProjectPage() {
     const { id = '' } = useParams()
@@ -19,6 +19,7 @@ export default function ProjectPage() {
     const [fields, setFields] = useState<string[]>([])
     const [totalRows, setTotalRows] = useState(0)
     const [page, setPage] = useState(1)
+    const [pageSize, setPageSize] = useState<number>(PAGE_SIZE_OPTIONS[0])
     const [sortField, setSortField] = useState('')
     const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
     const [filterField, setFilterField] = useState('')
@@ -72,7 +73,7 @@ export default function ProjectPage() {
         try {
             const result = await dataService.search(projectId, {
                 page,
-                pageSize: PAGE_SIZE,
+                pageSize,
                 sortField: sortField || undefined,
                 sortDirection,
                 filterField: filterField || undefined,
@@ -99,7 +100,7 @@ export default function ProjectPage() {
                 setIsLoadingRows(false)
             }
         }
-    }, [appliedFilterValue, filterField, page, project?.id, sortDirection, sortField])
+    }, [appliedFilterValue, filterField, page, pageSize, project?.id, sortDirection, sortField])
 
     useEffect(() => {
         let isCancelled = false
@@ -109,7 +110,7 @@ export default function ProjectPage() {
         }
     }, [loadData, refreshKey])
 
-    const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE))
+    const totalPages = Math.max(1, Math.ceil(totalRows / pageSize))
 
     const onImportCsv = async (event: ChangeEvent<HTMLInputElement>) => {
         if (!project) {
@@ -285,15 +286,15 @@ export default function ProjectPage() {
                     <div className="flex items-start gap-4">
                         <div className="min-w-0 flex-1">
                             <div className="overflow-x-auto rounded-md border">
-                                <Table className="table-fixed">
+                                <Table className="table-auto">
                                     <TableHeader>
                                         <TableRow>
                                             {fields.map((field) => (
-                                                <TableHead key={field} className="w-56 max-w-56 px-3 py-2">
+                                                <TableHead key={field} className="px-3 py-2">
                                                     <button
                                                         type="button"
                                                         onClick={() => onSortByField(field)}
-                                                        className="flex w-full items-center justify-between gap-2 text-left"
+                                                        className="inline-flex max-w-56 items-center gap-2 text-left"
                                                         aria-label={`Sort by ${field}`}
                                                     >
                                                         <span className="truncate" title={field}>
@@ -332,9 +333,9 @@ export default function ProjectPage() {
                                                         onClick={() => setSelectedRow(row)}
                                                     >
                                                         {fields.map((field) => (
-                                                            <TableCell key={`${rowIndex}-${field}`} className="w-56 max-w-56 px-3 py-2 align-top whitespace-normal">
+                                                            <TableCell key={`${rowIndex}-${field}`} className="px-3 py-2 align-top whitespace-normal">
                                                                 <div
-                                                                    className="max-h-12 overflow-hidden whitespace-pre-wrap break-all [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]"
+                                                                    className="w-fit max-w-56 overflow-hidden text-ellipsis whitespace-nowrap"
                                                                     title={row[field]}
                                                                 >
                                                                     {row[field]}
@@ -353,7 +354,34 @@ export default function ProjectPage() {
                                 <p className="text-sm text-muted-foreground">
                                     Page {page}/{totalPages} · {totalRows} rows · {sqlPreview}
                                 </p>
-                                <div className="flex gap-2">
+                                <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm text-muted-foreground">Page size</span>
+                                        <Combobox
+                                            value={String(pageSize)}
+                                            onValueChange={(value) => {
+                                                const nextPageSize = Number((value as string) ?? PAGE_SIZE_OPTIONS[0])
+                                                if (!PAGE_SIZE_OPTIONS.includes(nextPageSize as (typeof PAGE_SIZE_OPTIONS)[number])) {
+                                                    return
+                                                }
+
+                                                setPageSize(nextPageSize)
+                                                setPage(1)
+                                            }}
+                                        >
+                                            <ComboboxInput className="w-24" readOnly />
+                                            <ComboboxContent>
+                                                <ComboboxEmpty>No options</ComboboxEmpty>
+                                                <ComboboxList>
+                                                    {PAGE_SIZE_OPTIONS.map((option) => (
+                                                        <ComboboxItem key={option} value={String(option)}>
+                                                            {option}
+                                                        </ComboboxItem>
+                                                    ))}
+                                                </ComboboxList>
+                                            </ComboboxContent>
+                                        </Combobox>
+                                    </div>
                                     <Button type="button" variant="outline" onClick={() => setPage((prev) => Math.max(prev - 1, 1))} disabled={page <= 1}>
                                         Previous
                                     </Button>
