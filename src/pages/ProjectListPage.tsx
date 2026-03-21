@@ -1,5 +1,6 @@
-import { type MouseEvent, useEffect, useState } from 'react'
+import { type MouseEvent, useState } from 'react'
 import { Trash } from 'lucide-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -11,29 +12,16 @@ import { type Project, projectService } from '@/services/projectService'
 
 export default function ProjectListPage() {
   const navigate = useNavigate()
-  const [projects, setProjects] = useState<Project[]>([])
+  const queryClient = useQueryClient()
+  const { data: projects = [] } = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => projectService.getProjects(),
+  })
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [newProjectName, setNewProjectName] = useState('')
   const [newProjectDescription, setNewProjectDescription] = useState('')
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [pendingDeleteProject, setPendingDeleteProject] = useState<Project | null>(null)
-
-  useEffect(() => {
-    let isCancelled = false
-
-    const loadProjects = async () => {
-      const projectList = await projectService.getProjects()
-      if (!isCancelled) {
-        setProjects(projectList)
-      }
-    }
-
-    void loadProjects()
-
-    return () => {
-      isCancelled = true
-    }
-  }, [])
 
   const onDeleteProject = (event: MouseEvent<HTMLButtonElement>, id: string) => {
     event.stopPropagation()
@@ -52,8 +40,8 @@ export default function ProjectListPage() {
     }
 
     await dataService.delete(pendingDeleteProject.id)
-    const nextProjects = await projectService.deleteProject(pendingDeleteProject.id)
-    setProjects(nextProjects)
+    await projectService.deleteProject(pendingDeleteProject.id)
+    await queryClient.invalidateQueries({ queryKey: ['projects'] })
     setPendingDeleteProject(null)
     setIsDeleteDialogOpen(false)
   }
@@ -93,7 +81,7 @@ export default function ProjectListPage() {
       name: trimmedName,
       description: newProjectDescription,
     })
-    setProjects(await projectService.getProjects())
+    await queryClient.invalidateQueries({ queryKey: ['projects'] })
     setIsCreateDialogOpen(false)
     setNewProjectName('')
     setNewProjectDescription('')
