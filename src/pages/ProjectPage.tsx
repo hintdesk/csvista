@@ -1,5 +1,5 @@
 import { type ChangeEvent, useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowDown, ArrowUp, FileSpreadsheet, Filter, Pencil, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, FileSpreadsheet, RotateCcw, Pencil, X } from 'lucide-react'
 import { useParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from '@/components/ui/combobox'
@@ -23,8 +23,7 @@ export default function ProjectPage() {
     const [sortField, setSortField] = useState('')
     const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
     const [appliedFilters, setAppliedFilters] = useState<Record<string, string>>({})
-    const [draftFilters, setDraftFilters] = useState<Record<string, string>>({})
-    const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false)
+    const [filterInputs, setFilterInputs] = useState<Record<string, string>>({})
     const [sqlPreview, setSqlPreview] = useState('')
     const [selectedRow, setSelectedRow] = useState<Record<string, string> | null>(null)
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
@@ -35,8 +34,6 @@ export default function ProjectPage() {
     const [errorMessage, setErrorMessage] = useState('')
     const [refreshKey, setRefreshKey] = useState(0)
     const fileInputRef = useRef<HTMLInputElement>(null)
-
-    const activeFilterCount = Object.keys(appliedFilters).length
 
     useEffect(() => {
         if (!id) {
@@ -133,7 +130,7 @@ export default function ProjectPage() {
             setFields(importResult.fields)
             setSortField('')
             setAppliedFilters({})
-            setDraftFilters({})
+            setFilterInputs({})
             setPage(1)
             setSelectedRow(null)
             setRefreshKey((previous) => previous + 1)
@@ -197,21 +194,11 @@ export default function ProjectPage() {
         setPage(1)
     }
 
-    const onOpenFilterDialog = () => {
-        setDraftFilters(appliedFilters)
-        setIsFilterDialogOpen(true)
-    }
-
-    const onCancelFilterDialog = () => {
-        setDraftFilters(appliedFilters)
-        setIsFilterDialogOpen(false)
-    }
-
     const onApplyFilters = () => {
         const normalizedFilters: Record<string, string> = {}
 
         for (const field of fields) {
-            const value = draftFilters[field]?.trim() ?? ''
+            const value = filterInputs[field]?.trim() ?? ''
             if (value) {
                 normalizedFilters[field] = value
             }
@@ -219,23 +206,12 @@ export default function ProjectPage() {
 
         setAppliedFilters(normalizedFilters)
         setPage(1)
-        setIsFilterDialogOpen(false)
     }
 
     const onResetFilters = () => {
         setAppliedFilters({})
-        setDraftFilters({})
+        setFilterInputs({})
         setPage(1)
-        setIsFilterDialogOpen(false)
-    }
-
-    const onFilterDialogOpenChange = (nextOpen: boolean) => {
-        if (nextOpen) {
-            setDraftFilters(appliedFilters)
-        } else {
-            setDraftFilters(appliedFilters)
-        }
-        setIsFilterDialogOpen(nextOpen)
     }
 
     return (
@@ -257,13 +233,12 @@ export default function ProjectPage() {
                             type="button"
                             variant="outline"
                             size="sm"
-                            onClick={onOpenFilterDialog}
+                            onClick={onResetFilters}
                             disabled={fields.length === 0}
-                            aria-label={activeFilterCount > 0 ? `Filters active: ${activeFilterCount}` : 'Open filters'}
-                            title={activeFilterCount > 0 ? `${activeFilterCount} filter(s) active` : 'Open filters'}
+                            aria-label="Reset all filters"
                         >
-                            <Filter />
-                            <span>Filter</span>
+                            <RotateCcw />
+                            <span>Reset filter</span>
                         </Button>
                         <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={isImporting} aria-label="Import data">
                             <FileSpreadsheet />
@@ -282,20 +257,39 @@ export default function ProjectPage() {
                                         <TableRow>
                                             {fields.map((field) => (
                                                 <TableHead key={field} className="px-3 py-2">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => onSortByField(field)}
-                                                        className="inline-flex max-w-56 items-center gap-2 text-left"
-                                                        aria-label={`Sort by ${field}`}
-                                                    >
-                                                        <span className="truncate" title={field}>
-                                                            {field}
-                                                        </span>
-                                                        <span className="flex items-center gap-0.5">
-                                                            <ArrowUp className={`size-4 ${sortField === field && sortDirection === 'asc' ? 'text-foreground' : 'text-muted-foreground'}`} />
-                                                            <ArrowDown className={`size-4 ${sortField === field && sortDirection === 'desc' ? 'text-foreground' : 'text-muted-foreground'}`} />
-                                                        </span>
-                                                    </button>
+                                                    <div className="flex flex-col gap-2">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => onSortByField(field)}
+                                                            className="inline-flex max-w-56 items-center gap-2 text-left"
+                                                            aria-label={`Sort by ${field}`}
+                                                        >
+                                                            <span className="truncate" title={field}>
+                                                                {field}
+                                                            </span>
+                                                            <span className="flex items-center gap-0.5">
+                                                                <ArrowUp className={`size-4 ${sortField === field && sortDirection === 'asc' ? 'text-foreground' : 'text-muted-foreground'}`} />
+                                                                <ArrowDown className={`size-4 ${sortField === field && sortDirection === 'desc' ? 'text-foreground' : 'text-muted-foreground'}`} />
+                                                            </span>
+                                                        </button>
+                                                        <Input
+                                                            value={filterInputs[field] ?? ''}
+                                                            onChange={(event) => {
+                                                                const nextValue = event.target.value
+                                                                setFilterInputs((previous) => ({
+                                                                    ...previous,
+                                                                    [field]: nextValue,
+                                                                }))
+                                                            }}
+                                                            onKeyDown={(event) => {
+                                                                if (event.key === 'Enter') {
+                                                                    onApplyFilters()
+                                                                }
+                                                            }}
+                                                            placeholder="Filter..."
+                                                            className="h-8"
+                                                        />
+                                                    </div>
                                                 </TableHead>
                                             ))}
                                         </TableRow>
@@ -441,52 +435,6 @@ export default function ProjectPage() {
                         <Button type="button" onClick={onSaveEditProject} disabled={!editProjectName.trim()}>
                             Save
                         </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            <Dialog open={isFilterDialogOpen} onOpenChange={onFilterDialogOpenChange}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Filter data</DialogTitle>
-                        <DialogDescription>Set values for one or more columns. Use | for multiple values in the same field (OR). Blank fields are ignored.</DialogDescription>
-                    </DialogHeader>
-
-                    {fields.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No fields available for filtering.</p>
-                    ) : (
-                        <div className="max-h-[50vh] space-y-3 overflow-y-auto pr-1">
-                            {fields.map((field) => (
-                                <div key={field} className="space-y-1">
-                                    <p className="text-xs font-medium text-muted-foreground">{field}</p>
-                                    <Input
-                                        value={draftFilters[field] ?? ''}
-                                        onChange={(event) => {
-                                            const nextValue = event.target.value
-                                            setDraftFilters((previous) => ({
-                                                ...previous,
-                                                [field]: nextValue,
-                                            }))
-                                        }}
-                                        placeholder="Leave blank for no filter"
-                                    />
-                                </div>
-                            ))}
-                        </div>
-                    )}
-
-                    <DialogFooter className="w-full justify-between sm:justify-between">
-                        <Button type="button" variant="outline" onClick={onResetFilters}>
-                            Reset
-                        </Button>
-                        <div className="flex items-center gap-2">
-                            <Button type="button" variant="outline" onClick={onCancelFilterDialog}>
-                                Cancel
-                            </Button>
-                            <Button type="button" onClick={onApplyFilters}>
-                                Apply
-                            </Button>
-                        </div>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

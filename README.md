@@ -22,12 +22,12 @@ Users can create a project, upload one CSV file, and explore the data in both ta
   - Show row detail panel
 - Data operations
   - Sort by any column (ascending or descending)
-  - Open a compact Filter button to configure filters in a dialog
-  - Set filter values for one or more columns
-  - Blank filter fields are ignored
+  - Filter directly in the table header using one textbox per column
+  - Press Enter in any filter textbox to apply filters
+  - Blank filter textboxes are ignored
   - Filters across different columns are combined with AND
   - Multiple values in the same field can be separated with | for OR logic (example: Andrew | Peter)
-  - Filter dialog actions: Apply (save changes), Cancel (discard changes), Reset (clear all filters)
+  - Use the Reset filter button to clear all filter textboxes and applied filters
 - Charts
   - Add multiple charts per project
   - Build horizontal bar charts by selected field
