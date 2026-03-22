@@ -24,6 +24,7 @@ export default function ProjectPage() {
     const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
     const [appliedFilters, setAppliedFilters] = useState<Record<string, string>>({})
     const [filterInputs, setFilterInputs] = useState<Record<string, string>>({})
+    const filterDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const [sqlPreview, setSqlPreview] = useState('')
     const [selectedRow, setSelectedRow] = useState<Record<string, string> | null>(null)
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
@@ -194,7 +195,37 @@ export default function ProjectPage() {
         setPage(1)
     }
 
+    useEffect(() => {
+        if (filterDebounceRef.current) {
+            clearTimeout(filterDebounceRef.current)
+        }
+
+        filterDebounceRef.current = setTimeout(() => {
+            const normalizedFilters: Record<string, string> = {}
+
+            for (const field of fields) {
+                const value = filterInputs[field]?.trim() ?? ''
+                if (value) {
+                    normalizedFilters[field] = value
+                }
+            }
+
+            setAppliedFilters(normalizedFilters)
+            setPage(1)
+        }, 400)
+
+        return () => {
+            if (filterDebounceRef.current) {
+                clearTimeout(filterDebounceRef.current)
+            }
+        }
+    }, [filterInputs, fields])
+
     const onApplyFilters = () => {
+        if (filterDebounceRef.current) {
+            clearTimeout(filterDebounceRef.current)
+        }
+
         const normalizedFilters: Record<string, string> = {}
 
         for (const field of fields) {
@@ -286,6 +317,7 @@ export default function ProjectPage() {
                                                                     onApplyFilters()
                                                                 }
                                                             }}
+                                                            enterKeyHint="search"
                                                             placeholder="Filter..."
                                                             className="h-8"
                                                         />
