@@ -212,7 +212,7 @@ export default function ProjectPage() {
 
             setAppliedFilters(normalizedFilters)
             setPage(1)
-        }, 400)
+        }, 600)
 
         return () => {
             if (filterDebounceRef.current) {
