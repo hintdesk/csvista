@@ -11,11 +11,13 @@ export type QueryProjectRowsParams = {
   pageSize: number
   sortField?: string
   sortDirection?: SortDirection
+  filterValues?: Record<string, string>
   filterField?: string
   filterValue?: string
 }
 
 export type QueryFilteredRowsParams = {
+  filterValues?: Record<string, string>
   filterField?: string
   filterValue?: string
 }
@@ -99,10 +101,27 @@ function normalizeCsvRows(rows: unknown[]): Record<string, string>[] {
 
 function buildSqlLikeQuery(projectId: string, params: QueryProjectRowsParams) {
   const parts = [`SELECT * FROM "${projectId}"`]
+  const activeFilters = getActiveFilters(params)
 
-  if (params.filterField && params.filterValue) {
-    const escapedValue = params.filterValue.replaceAll("'", "''")
-    parts.push(`WHERE "${params.filterField}" LIKE '%${escapedValue}%'`)
+  if (Object.keys(activeFilters).length > 0) {
+    const whereClauses = Object.entries(activeFilters).map(([field, value]) => {
+      const escapedField = field.replaceAll('"', '""')
+      const terms = splitFilterTerms(value)
+
+      if (terms.length === 1) {
+        const escapedValue = terms[0]!.replaceAll("'", "''")
+        return `"${escapedField}" LIKE '%${escapedValue}%'`
+      }
+
+      const orClauses = terms.map((term) => {
+        const escapedValue = term.replaceAll("'", "''")
+        return `"${escapedField}" LIKE '%${escapedValue}%'`
+      })
+
+      return `(${orClauses.join(' OR ')})`
+    })
+
+    parts.push(`WHERE ${whereClauses.join(' AND ')}`)
   }
 
   if (params.sortField) {
@@ -113,6 +132,45 @@ function buildSqlLikeQuery(projectId: string, params: QueryProjectRowsParams) {
   parts.push(`LIMIT ${Math.max(params.pageSize, 1)} OFFSET ${offset}`)
 
   return parts.join(' ')
+}
+
+function getActiveFilters(params: QueryProjectRowsParams | QueryFilteredRowsParams): Record<string, string> {
+  const normalizedFilters: Record<string, string> = {}
+
+  for (const [field, value] of Object.entries(params.filterValues ?? {})) {
+    const trimmedField = field.trim()
+    const trimmedValue = value.trim()
+    if (!trimmedField || !trimmedValue) {
+      continue
+    }
+
+    normalizedFilters[trimmedField] = trimmedValue
+  }
+
+  const legacyField = params.filterField?.trim() ?? ''
+  const legacyValue = params.filterValue?.trim() ?? ''
+  if (legacyField && legacyValue && !normalizedFilters[legacyField]) {
+    normalizedFilters[legacyField] = legacyValue
+  }
+
+  return normalizedFilters
+}
+
+function splitFilterTerms(value: string): string[] {
+  return value
+    .split('|')
+    .map((term) => term.trim())
+    .filter((term) => term.length > 0)
+}
+
+function matchesFieldFilterValue(rowValue: string, filterValue: string): boolean {
+  const queryTerms = splitFilterTerms(filterValue)
+  if (queryTerms.length === 0) {
+    return true
+  }
+
+  const normalizedRowValue = rowValue.toLocaleLowerCase()
+  return queryTerms.some((term) => normalizedRowValue.includes(term.toLocaleLowerCase()))
 }
 
 function sortRows(rows: Record<string, string>[], field: string, direction: SortDirection) {
@@ -207,12 +265,11 @@ export const dataService = {
     const cachedEntry = cache ?? (await load(projectId))
     const rows = cachedEntry.rows
     const fields = cachedEntry.fields
-    const normalizedFilterValue = params.filterValue?.trim() ?? ''
+    const activeFilters = getActiveFilters(params)
 
     let processedRows = rows
-    if (params.filterField && normalizedFilterValue) {
-      const queryText = normalizedFilterValue.toLocaleLowerCase()
-      processedRows = processedRows.filter((row) => (row[params.filterField!] ?? '').toLocaleLowerCase().includes(queryText))
+    for (const [field, value] of Object.entries(activeFilters)) {
+      processedRows = processedRows.filter((row) => matchesFieldFilterValue(row[field] ?? '', value))
     }
 
     if (params.sortField) {
@@ -235,14 +292,14 @@ export const dataService = {
   async filter(projectId: string, params: QueryFilteredRowsParams): Promise<Record<string, string>[]> {
     const cachedEntry = cache ?? (await load(projectId))
     const rows = cachedEntry.rows
-    const normalizedFilterValue = params.filterValue?.trim() ?? ''
+    const activeFilters = getActiveFilters(params)
 
-    if (params.filterField && normalizedFilterValue) {
-      const queryText = normalizedFilterValue.toLocaleLowerCase()
-      return rows.filter((row) => (row[params.filterField!] ?? '').toLocaleLowerCase().includes(queryText))
+    let processedRows = rows
+    for (const [field, value] of Object.entries(activeFilters)) {
+      processedRows = processedRows.filter((row) => matchesFieldFilterValue(row[field] ?? '', value))
     }
 
-    return rows
+    return processedRows
   },
 
   async delete(projectId: string): Promise<void> {

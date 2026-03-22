@@ -1,5 +1,5 @@
 import { type ChangeEvent, useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowDown, ArrowUp, FileSpreadsheet, Pencil, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, FileSpreadsheet, Filter, Pencil, X } from 'lucide-react'
 import { useParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from '@/components/ui/combobox'
@@ -22,9 +22,9 @@ export default function ProjectPage() {
     const [pageSize, setPageSize] = useState<number>(PAGE_SIZE_OPTIONS[0])
     const [sortField, setSortField] = useState('')
     const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
-    const [filterField, setFilterField] = useState('')
-    const [filterInputValue, setFilterInputValue] = useState('')
-    const [appliedFilterValue, setAppliedFilterValue] = useState('')
+    const [appliedFilters, setAppliedFilters] = useState<Record<string, string>>({})
+    const [draftFilters, setDraftFilters] = useState<Record<string, string>>({})
+    const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false)
     const [sqlPreview, setSqlPreview] = useState('')
     const [selectedRow, setSelectedRow] = useState<Record<string, string> | null>(null)
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
@@ -35,6 +35,8 @@ export default function ProjectPage() {
     const [errorMessage, setErrorMessage] = useState('')
     const [refreshKey, setRefreshKey] = useState(0)
     const fileInputRef = useRef<HTMLInputElement>(null)
+
+    const activeFilterCount = Object.keys(appliedFilters).length
 
     useEffect(() => {
         if (!id) {
@@ -76,8 +78,7 @@ export default function ProjectPage() {
                 pageSize,
                 sortField: sortField || undefined,
                 sortDirection,
-                filterField: filterField || undefined,
-                filterValue: appliedFilterValue || undefined,
+                filterValues: appliedFilters,
             })
 
             if (isCancelled?.()) {
@@ -100,7 +101,7 @@ export default function ProjectPage() {
                 setIsLoadingRows(false)
             }
         }
-    }, [appliedFilterValue, filterField, page, pageSize, project?.id, sortDirection, sortField])
+    }, [appliedFilters, page, pageSize, project?.id, sortDirection, sortField])
 
     useEffect(() => {
         let isCancelled = false
@@ -131,9 +132,8 @@ export default function ProjectPage() {
 
             setFields(importResult.fields)
             setSortField('')
-            setFilterField('')
-            setFilterInputValue('')
-            setAppliedFilterValue('')
+            setAppliedFilters({})
+            setDraftFilters({})
             setPage(1)
             setSelectedRow(null)
             setRefreshKey((previous) => previous + 1)
@@ -197,6 +197,47 @@ export default function ProjectPage() {
         setPage(1)
     }
 
+    const onOpenFilterDialog = () => {
+        setDraftFilters(appliedFilters)
+        setIsFilterDialogOpen(true)
+    }
+
+    const onCancelFilterDialog = () => {
+        setDraftFilters(appliedFilters)
+        setIsFilterDialogOpen(false)
+    }
+
+    const onApplyFilters = () => {
+        const normalizedFilters: Record<string, string> = {}
+
+        for (const field of fields) {
+            const value = draftFilters[field]?.trim() ?? ''
+            if (value) {
+                normalizedFilters[field] = value
+            }
+        }
+
+        setAppliedFilters(normalizedFilters)
+        setPage(1)
+        setIsFilterDialogOpen(false)
+    }
+
+    const onResetFilters = () => {
+        setAppliedFilters({})
+        setDraftFilters({})
+        setPage(1)
+        setIsFilterDialogOpen(false)
+    }
+
+    const onFilterDialogOpenChange = (nextOpen: boolean) => {
+        if (nextOpen) {
+            setDraftFilters(appliedFilters)
+        } else {
+            setDraftFilters(appliedFilters)
+        }
+        setIsFilterDialogOpen(nextOpen)
+    }
+
     return (
         <main className="flex min-h-screen w-full flex-col gap-4 p-6">
             {project ? (
@@ -212,73 +253,23 @@ export default function ProjectPage() {
                     </header>
 
                     <div className="flex justify-end gap-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={onOpenFilterDialog}
+                            disabled={fields.length === 0}
+                            aria-label={activeFilterCount > 0 ? `Filters active: ${activeFilterCount}` : 'Open filters'}
+                            title={activeFilterCount > 0 ? `${activeFilterCount} filter(s) active` : 'Open filters'}
+                        >
+                            <Filter />
+                            <span>Filter</span>
+                        </Button>
                         <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={isImporting} aria-label="Import data">
                             <FileSpreadsheet />
                             <span>Import</span>
                         </Button>
                         <input ref={fileInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={onImportCsv} />
-                    </div>
-
-                    <div className="grid gap-3">
-                        <div className="flex flex-col gap-2">
-                            <p className="text-sm font-medium">Filter</p>
-                            <div className="flex gap-2">
-                                <Combobox
-                                    value={filterField || null}
-                                    onValueChange={(value) => {
-                                        const nextFilterField = (value as string) ?? ''
-                                        setFilterField(nextFilterField)
-                                        if (!nextFilterField) {
-                                            setFilterInputValue('')
-                                            setAppliedFilterValue('')
-                                            setPage(1)
-                                        }
-                                    }}
-                                >
-                                    <ComboboxInput className="w-full" placeholder="None" disabled={fields.length === 0} readOnly />
-                                    <ComboboxContent>
-                                        <ComboboxEmpty>No fields available</ComboboxEmpty>
-                                        <ComboboxList>
-                                            <ComboboxItem value="">None</ComboboxItem>
-                                            {fields.map((field) => (
-                                                <ComboboxItem key={field} value={field}>
-                                                    {field}
-                                                </ComboboxItem>
-                                            ))}
-                                        </ComboboxList>
-                                    </ComboboxContent>
-                                </Combobox>
-                                <div className="relative w-full">
-                                    <Input
-                                        value={filterInputValue}
-                                        onChange={(event) => setFilterInputValue(event.target.value)}
-                                        onKeyDown={(event) => {
-                                            if (event.key === 'Enter') {
-                                                setAppliedFilterValue(filterInputValue)
-                                                setPage(1)
-                                            }
-                                        }}
-                                        className="pr-8"
-                                        placeholder="Enter filter value"
-                                        disabled={fields.length === 0 || !filterField}
-                                    />
-                                    {filterInputValue ? (
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setFilterInputValue('')
-                                                setAppliedFilterValue('')
-                                                setPage(1)
-                                            }}
-                                            className="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                                            aria-label="Clear filter"
-                                        >
-                                            <X className="size-4" />
-                                        </button>
-                                    ) : null}
-                                </div>
-                            </div>
-                        </div>
                     </div>
 
                     {errorMessage ? <p className="text-sm text-destructive">{errorMessage}</p> : null}
@@ -450,6 +441,52 @@ export default function ProjectPage() {
                         <Button type="button" onClick={onSaveEditProject} disabled={!editProjectName.trim()}>
                             Save
                         </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={isFilterDialogOpen} onOpenChange={onFilterDialogOpenChange}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Filter data</DialogTitle>
+                        <DialogDescription>Set values for one or more columns. Use | for multiple values in the same field (OR). Blank fields are ignored.</DialogDescription>
+                    </DialogHeader>
+
+                    {fields.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No fields available for filtering.</p>
+                    ) : (
+                        <div className="max-h-[50vh] space-y-3 overflow-y-auto pr-1">
+                            {fields.map((field) => (
+                                <div key={field} className="space-y-1">
+                                    <p className="text-xs font-medium text-muted-foreground">{field}</p>
+                                    <Input
+                                        value={draftFilters[field] ?? ''}
+                                        onChange={(event) => {
+                                            const nextValue = event.target.value
+                                            setDraftFilters((previous) => ({
+                                                ...previous,
+                                                [field]: nextValue,
+                                            }))
+                                        }}
+                                        placeholder="Leave blank for no filter"
+                                    />
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    <DialogFooter className="w-full justify-between sm:justify-between">
+                        <Button type="button" variant="outline" onClick={onResetFilters}>
+                            Reset
+                        </Button>
+                        <div className="flex items-center gap-2">
+                            <Button type="button" variant="outline" onClick={onCancelFilterDialog}>
+                                Cancel
+                            </Button>
+                            <Button type="button" onClick={onApplyFilters}>
+                                Apply
+                            </Button>
+                        </div>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
