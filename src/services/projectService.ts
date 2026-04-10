@@ -80,17 +80,22 @@ function normalizeProject(item: unknown): Project | null {
   const charts = Array.isArray(project.charts)
     ? project.charts
         .filter((chart): chart is ProjectChart => typeof chart === 'object' && chart !== null)
-        .map((chart) => {
+        .map<ProjectChart | null>((chart) => {
           const id = typeof chart.id === 'string' && chart.id.trim() ? chart.id : crypto.randomUUID()
           const type = chart.type === 'line' ? 'line' : 'bar'
           const field = typeof chart.field === 'string' ? chart.field.trim() : ''
 
           if (type === 'line') {
-            return {
-              id,
-              type,
-              field: field || undefined,
-            }
+            return field
+              ? {
+                  id,
+                  type,
+                  field,
+                }
+              : {
+                  id,
+                  type,
+                }
           }
 
           if (!field) {
@@ -225,16 +230,21 @@ export const projectService = {
       }
 
       const normalizedCharts = charts
-        .map((chart) => {
+        .map<ProjectChart | null>((chart) => {
           const chartType = chart.type === 'line' ? 'line' : 'bar'
           const field = chart.field?.trim() ?? ''
 
           if (chartType === 'line') {
-            return {
-              id: chart.id,
-              type: chartType,
-              field: field || undefined,
-            }
+            return field
+              ? {
+                  id: chart.id,
+                  type: chartType,
+                  field,
+                }
+              : {
+                  id: chart.id,
+                  type: chartType,
+                }
           }
 
           if (!field) {
