@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Pencil, Plus, Trash2, X } from 'lucide-react'
-import { Bar, BarChart, CartesianGrid, Cell, LabelList, XAxis, YAxis } from 'recharts'
+import { Bar, BarChart, CartesianGrid, Cell, LabelList, Line, LineChart, XAxis, YAxis } from 'recharts'
 import { useParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -17,6 +17,24 @@ const barChartConfig = {
         color: 'var(--chart-1)',
     },
 } satisfies ChartConfig
+
+const TOTAL_CHART_COLORS = 20
+
+type LineChartSeries = {
+    key: string
+    label: string
+    color: string
+}
+
+type LineChartPoint = {
+    x: string
+    [seriesKey: string]: number | string
+}
+
+type LineChartModel = {
+    data: LineChartPoint[]
+    series: LineChartSeries[]
+}
 
 function createChartId() {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -59,8 +77,78 @@ function getChartHeight(categoryCount: number) {
 }
 
 function getChartBarColor(index: number) {
-    const token = (index % 10) + 1
+    const token = (index % TOTAL_CHART_COLORS) + 1
     return `var(--chart-${token})`
+}
+
+function createLineSeriesKey(value: string, index: number) {
+    const normalized = value
+        .trim()
+        .toLocaleLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '')
+
+    return normalized ? `series-${normalized}-${index}` : `series-${index}`
+}
+
+function parseLineValue(rawValue: string) {
+    const normalizedValue = rawValue.trim()
+    if (!normalizedValue) {
+        return null
+    }
+
+    const parsed = Number(normalizedValue)
+    return Number.isFinite(parsed) ? parsed : null
+}
+
+function buildLineChartData(rows: Record<string, string>[], fields: string[], seriesField: string): LineChartModel {
+    if (!seriesField || fields.length < 2 || rows.length === 0) {
+        return {
+            data: [],
+            series: [],
+        }
+    }
+
+    const valueFields = fields.filter((field) => field !== seriesField)
+    const points: LineChartPoint[] = valueFields.map((field) => ({ x: field }))
+    const seriesList: LineChartSeries[] = []
+
+    for (const [rowIndex, row] of rows.entries()) {
+        const rawLabel = (row[seriesField] ?? '').trim()
+        const label = rawLabel || `Series ${rowIndex + 1}`
+        const key = createLineSeriesKey(label, rowIndex)
+
+        seriesList.push({
+            key,
+            label,
+            color: getChartBarColor(rowIndex),
+        })
+
+        for (const [valueIndex, valueField] of valueFields.entries()) {
+            const parsedValue = parseLineValue(row[valueField] ?? '')
+            if (parsedValue === null) {
+                continue
+            }
+
+            points[valueIndex]![key] = parsedValue
+        }
+    }
+
+    return {
+        data: points,
+        series: seriesList,
+    }
+}
+
+function buildLineChartConfig(seriesList: LineChartSeries[]): ChartConfig {
+    return seriesList.reduce<ChartConfig>((config, series) => {
+        config[series.key] = {
+            label: series.label,
+            color: series.color,
+        }
+
+        return config
+    }, {})
 }
 
 
@@ -93,8 +181,11 @@ export default function ChartPage() {
     const [charts, setCharts] = useState<ProjectChart[]>([])
     const [isChartDialogOpen, setIsChartDialogOpen] = useState(false)
     const [chartDialogMode, setChartDialogMode] = useState<'create' | 'edit'>('create')
+    const [chartDialogType, setChartDialogType] = useState<'bar' | 'line'>('bar')
     const [selectedChartField, setSelectedChartField] = useState('')
     const [activeChartId, setActiveChartId] = useState<string | null>(null)
+    const [addChartType, setAddChartType] = useState<string | null>(null)
+    const [lineSeriesVisibilityByChartId, setLineSeriesVisibilityByChartId] = useState<Record<string, Record<string, boolean>>>({})
     const [errorMessage, setErrorMessage] = useState('')
 
     useEffect(() => {
@@ -136,7 +227,7 @@ export default function ChartPage() {
 
                 setFields(loadedFields)
                 setRows(loadedRows)
-                setCharts((previous) => previous.filter((chart) => loadedFields.includes(chart.field)))
+                setCharts((previous) => previous.filter((chart) => loadedFields.includes(chart.field ?? '')))
             })
             .catch((error: unknown) => {
                 if (isCancelled) {
@@ -157,13 +248,45 @@ export default function ChartPage() {
         }
 
         setChartDialogMode('create')
+        setChartDialogType('bar')
         setActiveChartId(null)
         setSelectedChartField(fields[0] ?? '')
         setIsChartDialogOpen(true)
     }
 
+    const onOpenAddLineChartDialog = () => {
+        if (fields.length < 2 || rows.length === 0) {
+            return
+        }
+
+        setChartDialogMode('create')
+        setChartDialogType('line')
+        setActiveChartId(null)
+        setSelectedChartField(fields[0] ?? '')
+        setIsChartDialogOpen(true)
+    }
+
+    const onSelectAddChartType = (value: string | null) => {
+        setAddChartType(value)
+
+        if (value === 'bar') {
+            onOpenAddChartDialog()
+        }
+
+        if (value === 'line') {
+            onOpenAddLineChartDialog()
+        }
+
+        setAddChartType(null)
+    }
+
     const onOpenEditChartDialog = (chart: ProjectChart) => {
+        if (!chart.field) {
+            return
+        }
+
         setChartDialogMode('edit')
+        setChartDialogType(chart.type)
         setActiveChartId(chart.id)
         setSelectedChartField(chart.field)
         setIsChartDialogOpen(true)
@@ -192,8 +315,8 @@ export default function ChartPage() {
 
         if (chartDialogMode === 'create') {
             setCharts((previous) => {
-                const nextCharts = [...previous, { id: createChartId(), field: selectedChartField }]
-                projectService.setCharts(project.id, nextCharts)
+                const nextCharts: ProjectChart[] = [...previous, { id: createChartId(), type: chartDialogType, field: selectedChartField }]
+                void projectService.setCharts(project.id, nextCharts)
                 return nextCharts
             })
             setIsChartDialogOpen(false)
@@ -205,22 +328,120 @@ export default function ChartPage() {
         }
 
         setCharts((previous) => {
-            const nextCharts = previous.map((chart) => (chart.id === activeChartId ? { ...chart, field: selectedChartField } : chart))
+            const nextCharts = previous.map((chart) => {
+                if (chart.id !== activeChartId) {
+                    return chart
+                }
+
+                return {
+                    ...chart,
+                    field: selectedChartField,
+                }
+            })
             void projectService.setCharts(project.id, nextCharts)
             return nextCharts
         })
         setIsChartDialogOpen(false)
     }
 
-    const chartDataById = useMemo(() => {
+    const barChartDataById = useMemo(() => {
         const next = new Map<string, Array<{ value: string; count: number }>>()
 
         for (const chart of charts) {
+            if (chart.type !== 'bar' || !chart.field) {
+                continue
+            }
+
             next.set(chart.id, buildFieldCountChartData(rows, chart.field))
         }
 
         return next
     }, [charts, rows])
+
+    const lineChartDataById = useMemo(() => {
+        const next = new Map<string, LineChartModel>()
+
+        for (const chart of charts) {
+            if (chart.type !== 'line' || !chart.field) {
+                continue
+            }
+
+            const lineModel = buildLineChartData(rows, fields, chart.field)
+            next.set(chart.id, lineModel)
+        }
+
+        return next
+    }, [charts, fields, rows])
+
+    const lineChartConfigById = useMemo(() => {
+        const next = new Map<string, ChartConfig>()
+
+        for (const chart of charts) {
+            if (chart.type !== 'line') {
+                continue
+            }
+
+            const lineModel = lineChartDataById.get(chart.id)
+            next.set(chart.id, buildLineChartConfig(lineModel?.series ?? []))
+        }
+
+        return next
+    }, [charts, lineChartDataById])
+
+    useEffect(() => {
+        setLineSeriesVisibilityByChartId((previous) => {
+            const next: Record<string, Record<string, boolean>> = {}
+
+            for (const chart of charts) {
+                if (chart.type !== 'line') {
+                    continue
+                }
+
+                const lineModel = lineChartDataById.get(chart.id)
+                const previousVisibility = previous[chart.id] ?? {}
+                const nextVisibility: Record<string, boolean> = {}
+
+                for (const series of lineModel?.series ?? []) {
+                    nextVisibility[series.key] = previousVisibility[series.key] ?? true
+                }
+
+                next[chart.id] = nextVisibility
+            }
+
+            return next
+        })
+    }, [charts, lineChartDataById])
+
+    const onToggleLineSeriesVisibility = (chartId: string, seriesKey: string) => {
+        setLineSeriesVisibilityByChartId((previous) => {
+            const currentByChart = previous[chartId] ?? {}
+
+            return {
+                ...previous,
+                [chartId]: {
+                    ...currentByChart,
+                    [seriesKey]: !(currentByChart[seriesKey] ?? true),
+                },
+            }
+        })
+    }
+
+    const canAddBarChart = fields.length > 0
+    const canAddLineChart = fields.length > 1 && rows.length > 0
+
+    const chartDialogTitle =
+        chartDialogType === 'bar'
+            ? chartDialogMode === 'create'
+                ? 'Add bar chart'
+                : 'Edit bar chart'
+            : chartDialogMode === 'create'
+              ? 'Add line chart'
+              : 'Edit line chart'
+
+    const chartDialogDescription =
+        chartDialogType === 'bar'
+            ? 'Select a field for the horizontal bar chart.'
+            : 'Select a column for line series labels in the legend.'
 
     if (!project) {
         return (
@@ -234,10 +455,29 @@ export default function ChartPage() {
         <main className="flex min-h-screen w-full flex-col gap-4 p-6">
             <section className="flex items-center justify-end gap-2">
                 <div className="flex items-center gap-2">
-                    <Button type="button" variant="outline" size="sm" onClick={onOpenAddChartDialog} disabled={fields.length === 0} aria-label="Add chart">
-                        <Plus />
-                        <span>Add chart</span>
-                    </Button>
+                    <Combobox
+                        value={addChartType}
+                        onValueChange={(value) => onSelectAddChartType(((value as string) ?? '') || null)}
+                    >
+                        <ComboboxInput className="w-56" placeholder="Select Add Chart" readOnly disabled={!canAddBarChart && !canAddLineChart} />
+                        <ComboboxContent>
+                            <ComboboxEmpty>No chart type available</ComboboxEmpty>
+                            <ComboboxList>
+                                {canAddBarChart ? (
+                                    <ComboboxItem value="bar">
+                                        <Plus className="size-4" />
+                                        Bar Chart
+                                    </ComboboxItem>
+                                ) : null}
+                                {canAddLineChart ? (
+                                    <ComboboxItem value="line">
+                                        <Plus className="size-4" />
+                                        Line Chart
+                                    </ComboboxItem>
+                                ) : null}
+                            </ComboboxList>
+                        </ComboboxContent>
+                    </Combobox>
                 </div>
             </section>
 
@@ -305,13 +545,96 @@ export default function ChartPage() {
             {charts.length > 0 ? (
                 <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     {charts.map((chart) => {
-                        const chartData = chartDataById.get(chart.id) ?? []
+                        if (chart.type === 'line') {
+                            const lineModel = lineChartDataById.get(chart.id) ?? { data: [], series: [] }
+                            const chartConfig = lineChartConfigById.get(chart.id) ?? {}
+                            const seriesVisibility = lineSeriesVisibilityByChartId[chart.id] ?? {}
+
+                            return (
+                                <Card key={chart.id} className="gap-3 py-4">
+                                    <CardHeader className="flex flex-row items-start justify-between gap-3 px-4">
+                                        <div className="space-y-1">
+                                            <CardTitle>Line chart: {chart.field ?? ''}</CardTitle>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <Button type="button" size="icon-sm" variant="outline" onClick={() => onOpenEditChartDialog(chart)} aria-label="Edit chart">
+                                                <Pencil />
+                                            </Button>
+                                            <Button type="button" size="icon-sm" variant="outline" onClick={() => onDeleteChart(chart.id)} aria-label="Delete chart">
+                                                <Trash2 />
+                                            </Button>
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent className="px-4">
+                                        {lineModel.data.length > 0 && lineModel.series.length > 0 ? (
+                                            <div className="flex flex-col gap-3 md:flex-row">
+                                                <div className="min-w-0 flex-1">
+                                                    <ChartContainer config={chartConfig} className="w-full aspect-auto" style={{ height: '360px' }}>
+                                                        <LineChart data={lineModel.data} margin={{ top: 8, right: 12, bottom: 8, left: 8 }}>
+                                                            <CartesianGrid horizontal={false} />
+                                                            <XAxis type="category" dataKey="x" />
+                                                            <YAxis />
+                                                            <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="line" />} />
+                                                            {lineModel.series.map((series) => {
+                                                                const isVisible = seriesVisibility[series.key] ?? true
+                                                                if (!isVisible) {
+                                                                    return null
+                                                                }
+
+                                                                return (
+                                                                    <Line
+                                                                        key={series.key}
+                                                                        type="monotone"
+                                                                        dataKey={series.key}
+                                                                        name={series.label}
+                                                                        stroke={series.color}
+                                                                        strokeWidth={2}
+                                                                        dot={false}
+                                                                        connectNulls={false}
+                                                                    />
+                                                                )
+                                                            })}
+                                                        </LineChart>
+                                                    </ChartContainer>
+                                                </div>
+                                                <aside className="md:w-44 md:shrink-0 md:border-l md:pl-3">
+                                                    <p className="mb-2 text-xs font-medium text-muted-foreground">Legend</p>
+                                                    <div className="flex flex-col gap-2">
+                                                        {lineModel.series.map((series) => {
+                                                            const isVisible = seriesVisibility[series.key] ?? true
+
+                                                            return (
+                                                                <label key={series.key} className="flex items-center gap-2 text-sm">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={isVisible}
+                                                                        onChange={() => onToggleLineSeriesVisibility(chart.id, series.key)}
+                                                                    />
+                                                                    <span className="size-2.5 rounded-full" style={{ backgroundColor: series.color }} />
+                                                                    <span className="truncate" title={series.label}>
+                                                                        {series.label}
+                                                                    </span>
+                                                                </label>
+                                                            )
+                                                        })}
+                                                    </div>
+                                                </aside>
+                                            </div>
+                                        ) : (
+                                            <p className="text-sm text-muted-foreground">No numeric data available for the line chart.</p>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                            )
+                        }
+
+                        const chartData = barChartDataById.get(chart.id) ?? []
 
                         return (
                             <Card key={chart.id} className="gap-3 py-4">
                                 <CardHeader className="flex flex-row items-start justify-between gap-3 px-4">
                                     <div className="space-y-1">
-                                        <CardTitle>{chart.field}</CardTitle>
+                                        <CardTitle>{chart.field ?? ''}</CardTitle>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <Button type="button" size="icon-sm" variant="outline" onClick={() => onOpenEditChartDialog(chart)} aria-label="Edit chart">
@@ -363,8 +686,8 @@ export default function ChartPage() {
             >
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>{chartDialogMode === 'create' ? 'Add chart' : 'Edit chart'}</DialogTitle>
-                        <DialogDescription>Select a field for the horizontal bar chart.</DialogDescription>
+                        <DialogTitle>{chartDialogTitle}</DialogTitle>
+                        <DialogDescription>{chartDialogDescription}</DialogDescription>
                     </DialogHeader>
 
                     <Combobox value={selectedChartField || null} onValueChange={(value) => setSelectedChartField((value as string) ?? '')}>

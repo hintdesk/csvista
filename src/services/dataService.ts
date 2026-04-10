@@ -34,6 +34,9 @@ type CacheInfo = {
   fields: string[]
 }
 
+const FIELD_ORDER_META_KEY = '__csvista_meta__'
+const FIELD_ORDER_META_VALUE = 'field-order'
+
 let dbPromise: Promise<IDBPDatabase> | null = null
 let cache: CacheInfo | null = null
 
@@ -81,16 +84,40 @@ async function ensureProjectStore(projectId: string): Promise<void> {
   })
 }
 
-function normalizeCsvRows(rows: unknown[]): Record<string, string>[] {
+function normalizeFieldOrder(fields: unknown[]): string[] {
+  const nextFields: string[] = []
+
+  for (const field of fields) {
+    if (typeof field !== 'string') {
+      continue
+    }
+
+    const trimmedField = field.trim()
+    if (!trimmedField) {
+      continue
+    }
+
+    if (nextFields.includes(trimmedField)) {
+      continue
+    }
+
+    nextFields.push(trimmedField)
+  }
+
+  return nextFields
+}
+
+function normalizeCsvRows(rows: unknown[], fieldOrder: string[]): Record<string, string>[] {
   return rows
     .filter((row): row is Record<string, unknown> => typeof row === 'object' && row !== null)
     .map((row) => {
       const nextRow: Record<string, string> = {}
-      for (const [key, value] of Object.entries(row)) {
-        if (!key.trim()) {
+      for (const key of fieldOrder) {
+        if (!key) {
           continue
         }
 
+        const value = row[key]
         nextRow[key] = value == null ? '' : String(value)
       }
 
@@ -183,11 +210,22 @@ function sortRows(rows: Record<string, string>[], field: string, direction: Sort
   })
 }
 
-function sanitizeStoredRows(rawRows: unknown[]): Record<string, string>[] {
-  return rawRows.map((row) => {
+function sanitizeStoredRows(rawRows: unknown[]): CacheInfo {
+  const rows: Record<string, string>[] = []
+  let fieldsFromMeta: string[] = []
+
+  for (const row of rawRows) {
+    if (typeof row === 'object' && row !== null) {
+      const metadataCandidate = row as Record<string, unknown>
+      if (metadataCandidate[FIELD_ORDER_META_KEY] === FIELD_ORDER_META_VALUE && Array.isArray(metadataCandidate.fields)) {
+        fieldsFromMeta = normalizeFieldOrder(metadataCandidate.fields)
+        continue
+      }
+    }
+
     const nextRow: Record<string, string> = {}
     if (typeof row !== 'object' || row === null) {
-      return nextRow
+      continue
     }
 
     for (const [key, value] of Object.entries(row)) {
@@ -198,8 +236,17 @@ function sanitizeStoredRows(rawRows: unknown[]): Record<string, string>[] {
       nextRow[key] = value == null ? '' : String(value)
     }
 
-    return nextRow
-  })
+    if (Object.keys(nextRow).length > 0) {
+      rows.push(nextRow)
+    }
+  }
+
+  const fields = fieldsFromMeta.length > 0 ? fieldsFromMeta : rows.length > 0 ? Object.keys(rows[0]) : []
+
+  return {
+    rows,
+    fields,
+  }
 }
 
 async function load(projectId: string): Promise<CacheInfo> {
@@ -214,8 +261,9 @@ async function load(projectId: string): Promise<CacheInfo> {
   }
 
   const rawRows = await db.getAll(projectId)
-  const rows = sanitizeStoredRows(rawRows)
-  const fields = rows.length > 0 ? Object.keys(rows[0]) : []
+  const sanitizedData = sanitizeStoredRows(rawRows)
+  const rows = sanitizedData.rows
+  const fields = sanitizedData.fields
   const cacheEntry: CacheInfo = {
     rows,
     fields,
@@ -238,12 +286,17 @@ export const dataService = {
       throw new Error(parseResult.errors[0]?.message ?? 'Unable to parse CSV file.')
     }
 
-    const rows = normalizeCsvRows(parseResult.data)
-    const fields = rows.length > 0 ? Object.keys(rows[0]) : []
+    const fields = normalizeFieldOrder(parseResult.meta.fields ?? [])
+    const rows = normalizeCsvRows(parseResult.data, fields)
     const db = await getDb()
     const transaction = db.transaction(projectId, 'readwrite')
     const store = transaction.objectStore(projectId)
     await store.clear()
+
+    await store.add({
+      [FIELD_ORDER_META_KEY]: FIELD_ORDER_META_VALUE,
+      fields,
+    })
 
     for (const row of rows) {
       await store.add(row)

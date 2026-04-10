@@ -11,7 +11,8 @@ export type Project = {
 
 export type ProjectChart = {
   id: string
-  field: string
+  type: 'bar' | 'line'
+  field?: string
 }
 
 const DATABASE_NAME = 'csvista'
@@ -79,11 +80,30 @@ function normalizeProject(item: unknown): Project | null {
   const charts = Array.isArray(project.charts)
     ? project.charts
         .filter((chart): chart is ProjectChart => typeof chart === 'object' && chart !== null)
-        .map((chart) => ({
-          id: typeof chart.id === 'string' && chart.id.trim() ? chart.id : crypto.randomUUID(),
-          field: typeof chart.field === 'string' ? chart.field : '',
-        }))
-        .filter((chart) => chart.field.trim().length > 0)
+        .map((chart) => {
+          const id = typeof chart.id === 'string' && chart.id.trim() ? chart.id : crypto.randomUUID()
+          const type = chart.type === 'line' ? 'line' : 'bar'
+          const field = typeof chart.field === 'string' ? chart.field.trim() : ''
+
+          if (type === 'line') {
+            return {
+              id,
+              type,
+              field: field || undefined,
+            }
+          }
+
+          if (!field) {
+            return null
+          }
+
+          return {
+            id,
+            type,
+            field,
+          }
+        })
+        .filter((chart): chart is ProjectChart => chart !== null)
     : []
 
   return {
@@ -205,11 +225,29 @@ export const projectService = {
       }
 
       const normalizedCharts = charts
-        .filter((chart) => chart.field.trim().length > 0)
-        .map((chart) => ({
-          id: chart.id,
-          field: chart.field,
-        }))
+        .map((chart) => {
+          const chartType = chart.type === 'line' ? 'line' : 'bar'
+          const field = chart.field?.trim() ?? ''
+
+          if (chartType === 'line') {
+            return {
+              id: chart.id,
+              type: chartType,
+              field: field || undefined,
+            }
+          }
+
+          if (!field) {
+            return null
+          }
+
+          return {
+            id: chart.id,
+            type: chartType,
+            field,
+          }
+        })
+        .filter((chart): chart is ProjectChart => chart !== null)
 
       const updatedProject: Project = {
         ...existingProject,
