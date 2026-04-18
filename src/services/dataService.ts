@@ -1,19 +1,12 @@
+import type { QueryParams } from '@/entities/queryParams'
+import type { SortDirection } from '@/entities/sortDirection'
 import { openDB, type IDBPDatabase } from 'idb'
 import Papa from 'papaparse'
 
 const DATABASE_NAME = 'csvista'
 
-export type SortDirection = 'asc' | 'desc'
 
-export type QueryProjectRowsParams = {
-  page: number
-  pageSize: number
-  sortField?: string
-  sortDirection?: SortDirection
-  filterValues?: Record<string, string>
-  filterField?: string
-  filterValue?: string
-}
+
 
 export type QueryFilteredRowsParams = {
   filterValues?: Record<string, string>
@@ -116,7 +109,7 @@ function normalizeCsvRows(rows: unknown[], fieldOrder: string[]): Record<string,
     .filter((row) => Object.keys(row).length > 0)
 }
 
-function buildSqlLikeQuery(projectId: string, params: QueryProjectRowsParams) {
+function buildSqlLikeQuery(projectId: string, params: QueryParams) {
   const parts = [`SELECT * FROM "${projectId}"`]
   const activeFilters = getActiveFilters(params)
 
@@ -151,7 +144,7 @@ function buildSqlLikeQuery(projectId: string, params: QueryProjectRowsParams) {
   return parts.join(' ')
 }
 
-function getActiveFilters(params: QueryProjectRowsParams | QueryFilteredRowsParams): Record<string, string> {
+function getActiveFilters(params: QueryParams | QueryFilteredRowsParams): Record<string, string> {
   const normalizedFilters: Record<string, string> = {}
 
   for (const [field, value] of Object.entries(params.filterValues ?? {})) {
@@ -162,12 +155,6 @@ function getActiveFilters(params: QueryProjectRowsParams | QueryFilteredRowsPara
     }
 
     normalizedFilters[trimmedField] = trimmedValue
-  }
-
-  const legacyField = params.filterField?.trim() ?? ''
-  const legacyValue = params.filterValue?.trim() ?? ''
-  if (legacyField && legacyValue && !normalizedFilters[legacyField]) {
-    normalizedFilters[legacyField] = legacyValue
   }
 
   return normalizedFilters
@@ -265,7 +252,7 @@ export const dataService = {
     return { totalRows: rows.length, fields }
   },
 
-  async search(projectId: string, params: QueryProjectRowsParams): Promise<QueryProjectRowsResult> {
+  async search(projectId: string, params: QueryParams): Promise<QueryProjectRowsResult> {
     const cachedEntry = cache ?? (await load(projectId))
     const rows = cachedEntry.rows
     const activeFilters = getActiveFilters(params)

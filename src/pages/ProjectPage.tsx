@@ -7,9 +7,10 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
-import { dataService, type SortDirection } from '@/services/dataService'
+import { dataService } from '@/services/dataService'
 import { projectService } from '@/services/projectService'
 import type { Project } from '@/entities/project'
+import type { SortDirection } from '@/entities/sortDirection'
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50] as const
 
