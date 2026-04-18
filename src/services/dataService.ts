@@ -1,4 +1,6 @@
-import type { QueryParams } from '@/entities/queryParams'
+import type { CacheInfo } from '@/entities/cacheInfo'
+import type { QueryParams } from '@/entities/searchParams'
+import type { SearchResult } from '@/entities/searchResult'
 import type { SortDirection } from '@/entities/sortDirection'
 import { openDB, type IDBPDatabase } from 'idb'
 import Papa from 'papaparse'
@@ -6,21 +8,6 @@ import Papa from 'papaparse'
 const DATABASE_NAME = 'csvista'
 
 
-export type QueryFilteredRowsParams = {
-  filterValues?: Record<string, string>
-  filterField?: string
-  filterValue?: string
-}
-
-export type QueryProjectRowsResult = {
-  rows: Record<string, string>[]
-  total: number
-  sql: string
-}
-
-type CacheInfo = {
-  rows: Record<string, string>[]
-}
 
 let dbPromise: Promise<IDBPDatabase> | null = null
 let cache: CacheInfo | null = null
@@ -142,7 +129,7 @@ function buildSqlLikeQuery(projectId: string, params: QueryParams) {
   return parts.join(' ')
 }
 
-function getActiveFilters(params: QueryParams | QueryFilteredRowsParams): Record<string, string> {
+function getActiveFilters(params: QueryParams): Record<string, string> {
   const normalizedFilters: Record<string, string> = {}
 
   for (const [field, value] of Object.entries(params.filterValues ?? {})) {
@@ -188,7 +175,7 @@ function sortRows(rows: Record<string, string>[], field: string, direction: Sort
 async function load(projectId: string): Promise<CacheInfo> {
   const db = await getDb()
   if (!db.objectStoreNames.contains(projectId)) {
-    const emptyEntry: CacheInfo = { rows: [] }
+    const emptyEntry: CacheInfo = { Rows: [] }
     cache = emptyEntry
     return emptyEntry
   }
@@ -215,7 +202,7 @@ async function load(projectId: string): Promise<CacheInfo> {
     }
   }
 
-  const cacheEntry: CacheInfo = { rows }
+  const cacheEntry: CacheInfo = { Rows: rows }
   cache = cacheEntry
   return cacheEntry
 }
@@ -245,20 +232,20 @@ export const dataService = {
     }
 
     await transaction.done
-    cache = { rows }
+    cache = { Rows: rows }
 
     return { totalRows: rows.length, fields }
   },
 
   async get(projectId: string): Promise<Record<string, string>[]> {
     const cachedEntry = cache ?? (await load(projectId));
-    const rows = cachedEntry.rows;
+    const rows = cachedEntry.Rows;
     return rows;
   },
 
-  async search(projectId: string, params: QueryParams): Promise<QueryProjectRowsResult> {
+  async search(projectId: string, params: QueryParams): Promise<SearchResult> {
     const cachedEntry = cache ?? (await load(projectId))
-    const rows = cachedEntry.rows
+    const rows = cachedEntry.Rows
     const activeFilters = getActiveFilters(params)
 
     let processedRows = rows
@@ -276,9 +263,9 @@ export const dataService = {
     const paginatedRows = processedRows.slice(startIndex, startIndex + pageSize)
 
     return {
-      rows: paginatedRows,
-      total: processedRows.length,
-      sql: buildSqlLikeQuery(projectId, params),
+      Rows: paginatedRows,
+      Total: processedRows.length,
+      Sql: buildSqlLikeQuery(projectId, params),
     }
   },
 

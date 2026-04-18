@@ -86,9 +86,9 @@ export default function ProjectPage() {
                 return
             }
 
-            setRows(result.rows)
-            setTotalRows(result.total)
-            setSqlPreview(result.sql)
+            setRows(result.Rows)
+            setTotalRows(result.Total)
+            setSqlPreview(result.Sql)
             setSelectedRow(null)
         } catch (error) {
             if (isCancelled?.()) {
