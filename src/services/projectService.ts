@@ -1,22 +1,10 @@
+import type { Project } from '@/entities/project'
+import type { ProjectChart } from '@/entities/projectChart'
 import { openDB, type IDBPDatabase } from 'idb'
-
-export type Project = {
-  id: string
-  name: string
-  description: string
-  createdAt: string
-  updatedAt: string
-  charts: ProjectChart[]
-}
-
-export type ProjectChart = {
-  id: string
-  type: 'bar' | 'line'
-  field?: string
-}
 
 const DATABASE_NAME = 'csvista'
 const PROJECTS_STORE_NAME = 'projects'
+
 let dbPromise: Promise<IDBPDatabase> | null = null
 
 function getDb() {
@@ -52,7 +40,7 @@ async function ensureProjectsStore() {
   dbPromise = openDB(DATABASE_NAME, nextVersion, {
     upgrade(upgradeDb) {
       if (!upgradeDb.objectStoreNames.contains(PROJECTS_STORE_NAME)) {
-        upgradeDb.createObjectStore(PROJECTS_STORE_NAME, { keyPath: 'id' })
+        upgradeDb.createObjectStore(PROJECTS_STORE_NAME, { keyPath: 'Id' })
       }
     },
     blocked() {
@@ -75,26 +63,26 @@ function normalizeProject(item: unknown): Project | null {
   }
 
   const project = item as Partial<Project>
-  const id = typeof project.id === 'string' && project.id.trim() ? project.id : crypto.randomUUID()
-  const createdAt = typeof project.createdAt === 'string' && project.createdAt ? project.createdAt : new Date().toISOString()
-  const charts = Array.isArray(project.charts)
-    ? project.charts
+  const id = typeof project.Id === 'string' && project.Id.trim() ? project.Id : crypto.randomUUID()
+  const createdAt = typeof project.CreatedAt === 'string' && project.CreatedAt ? project.CreatedAt : new Date().toISOString()
+  const charts = Array.isArray(project.Charts)
+    ? project.Charts
         .filter((chart): chart is ProjectChart => typeof chart === 'object' && chart !== null)
         .map<ProjectChart | null>((chart) => {
-          const id = typeof chart.id === 'string' && chart.id.trim() ? chart.id : crypto.randomUUID()
-          const type = chart.type === 'line' ? 'line' : 'bar'
-          const field = typeof chart.field === 'string' ? chart.field.trim() : ''
+          const chartId = typeof chart.Id === 'string' && chart.Id.trim() ? chart.Id : crypto.randomUUID()
+          const type = chart.Type === 'line' ? 'line' : 'bar'
+          const field = typeof chart.Field === 'string' ? chart.Field.trim() : ''
 
           if (type === 'line') {
             return field
               ? {
-                  id,
-                  type,
-                  field,
+                  Id: chartId,
+                  Type: type,
+                  Field: field,
                 }
               : {
-                  id,
-                  type,
+                  Id: chartId,
+                  Type: type,
                 }
           }
 
@@ -103,26 +91,36 @@ function normalizeProject(item: unknown): Project | null {
           }
 
           return {
-            id,
-            type,
-            field,
+            Id: chartId,
+            Type: type,
+            Field: field,
           }
         })
         .filter((chart): chart is ProjectChart => chart !== null)
     : []
 
+  const fields = Array.isArray(project.Fields)
+    ? project.Fields.filter((f): f is string => typeof f === 'string' && f.trim().length > 0).map((f) => f.trim())
+    : []
+
+  const visibleFields = Array.isArray(project.VisibleFields)
+    ? project.VisibleFields.filter((f): f is string => typeof f === 'string' && f.trim().length > 0).map((f) => f.trim())
+    : fields
+
   return {
-    id,
-    name: typeof project.name === 'string' && project.name.trim() ? project.name : `Project ${id.slice(0, 8)}`,
-    description: typeof project.description === 'string' ? project.description : '',
-    createdAt,
-    updatedAt: typeof project.updatedAt === 'string' && project.updatedAt ? project.updatedAt : createdAt,
-    charts,
+    Id: id,
+    Name: typeof project.Name === 'string' && project.Name.trim() ? project.Name : `Project ${id.slice(0, 8)}`,
+    Description: typeof project.Description === 'string' ? project.Description : '',
+    CreatedAt: createdAt,
+    UpdatedAt: typeof project.UpdatedAt === 'string' && project.UpdatedAt ? project.UpdatedAt : createdAt,
+    Charts: charts,
+    Fields: fields,
+    VisibleFields: visibleFields,
   }
 }
 
 function sortProjectsByUpdatedAt(projects: Project[]) {
-  return [...projects].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+  return [...projects].sort((left, right) => right.UpdatedAt.localeCompare(left.UpdatedAt))
 }
 
 export const projectService = {
@@ -154,12 +152,14 @@ export const projectService = {
     const projectName = sanitizedName || `Project ${new Date().toLocaleString()}`
 
     const project: Project = {
-      id: crypto.randomUUID(),
-      name: projectName,
-      description: payload.description.trim(),
-      createdAt: now,
-      updatedAt: now,
-      charts: [],
+      Id: crypto.randomUUID(),
+      Name: projectName,
+      Description: payload.description.trim(),
+      CreatedAt: now,
+      UpdatedAt: now,
+      Charts: [],
+      Fields: [],
+      VisibleFields: [],
     }
 
     const db = await ensureProjectsStore()
@@ -200,9 +200,9 @@ export const projectService = {
 
       const updatedProject: Project = {
         ...existingProject,
-        name: nextName,
-        description: payload.description.trim(),
-        updatedAt: new Date().toISOString(),
+        Name: nextName,
+        Description: payload.description.trim(),
+        UpdatedAt: new Date().toISOString(),
       }
 
       await db.put(PROJECTS_STORE_NAME, updatedProject)
@@ -220,6 +220,29 @@ export const projectService = {
     return project
   },
 
+  async setFieldMeta(id: string, fields: string[], visibleFields: string[]): Promise<Project | undefined> {
+    const db = await ensureProjectsStore()
+
+    try {
+      const existingProject = normalizeProject(await db.get(PROJECTS_STORE_NAME, id))
+      if (!existingProject) {
+        return undefined
+      }
+
+      const updatedProject: Project = {
+        ...existingProject,
+        Fields: fields,
+        VisibleFields: visibleFields,
+        UpdatedAt: new Date().toISOString(),
+      }
+
+      await db.put(PROJECTS_STORE_NAME, updatedProject)
+      return updatedProject
+    } finally {
+      releaseDb(db)
+    }
+  },
+
   async setCharts(id: string, charts: ProjectChart[]): Promise<Project | undefined> {
     const db = await ensureProjectsStore()
 
@@ -231,19 +254,19 @@ export const projectService = {
 
       const normalizedCharts = charts
         .map<ProjectChart | null>((chart) => {
-          const chartType = chart.type === 'line' ? 'line' : 'bar'
-          const field = chart.field?.trim() ?? ''
+          const chartType = chart.Type === 'line' ? 'line' : 'bar'
+          const field = chart.Field?.trim() ?? ''
 
           if (chartType === 'line') {
             return field
               ? {
-                  id: chart.id,
-                  type: chartType,
-                  field,
+                  Id: chart.Id,
+                  Type: chartType,
+                  Field: field,
                 }
               : {
-                  id: chart.id,
-                  type: chartType,
+                  Id: chart.Id,
+                  Type: chartType,
                 }
           }
 
@@ -252,17 +275,17 @@ export const projectService = {
           }
 
           return {
-            id: chart.id,
-            type: chartType,
-            field,
+            Id: chart.Id,
+            Type: chartType,
+            Field: field,
           }
         })
         .filter((chart): chart is ProjectChart => chart !== null)
 
       const updatedProject: Project = {
         ...existingProject,
-        charts: normalizedCharts,
-        updatedAt: new Date().toISOString(),
+        Charts: normalizedCharts,
+        UpdatedAt: new Date().toISOString(),
       }
 
       await db.put(PROJECTS_STORE_NAME, updatedProject)
@@ -272,3 +295,6 @@ export const projectService = {
     }
   },
 }
+
+export type { Project }
+export type { ProjectChart }

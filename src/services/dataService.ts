@@ -2,7 +2,6 @@ import { openDB, type IDBPDatabase } from 'idb'
 import Papa from 'papaparse'
 
 const DATABASE_NAME = 'csvista'
-const PROJECTS_STORE_NAME = 'projects'
 
 export type SortDirection = 'asc' | 'desc'
 
@@ -24,20 +23,13 @@ export type QueryFilteredRowsParams = {
 
 export type QueryProjectRowsResult = {
   rows: Record<string, string>[]
-  fields: string[]
-  visibleFields: string[]
   total: number
   sql: string
 }
 
 type CacheInfo = {
   rows: Record<string, string>[]
-  fields: string[]
-  visibleFields: string[]
 }
-
-const FIELD_ORDER_META_KEY = '__csvista_meta__'
-const FIELD_ORDER_META_VALUE = 'field-order'
 
 let dbPromise: Promise<IDBPDatabase> | null = null
 let cache: CacheInfo | null = null
@@ -46,10 +38,6 @@ function getDb(version?: number, storeToCreate?: string) {
   if (!dbPromise || version !== undefined) {
     dbPromise = openDB(DATABASE_NAME, version, {
       upgrade(db) {
-        if (!db.objectStoreNames.contains(PROJECTS_STORE_NAME)) {
-          db.createObjectStore(PROJECTS_STORE_NAME, { keyPath: 'id' })
-        }
-
         if (storeToCreate && !db.objectStoreNames.contains(storeToCreate)) {
           db.createObjectStore(storeToCreate, { keyPath: 'id', autoIncrement: true })
         }
@@ -86,7 +74,7 @@ async function ensureProjectStore(projectId: string): Promise<void> {
   })
 }
 
-function normalizeFieldOrder(fields: unknown[]): string[] {
+function normalizeFields(fields: unknown[]): string[] {
   const nextFields: string[] = []
 
   for (const field of fields) {
@@ -107,21 +95,6 @@ function normalizeFieldOrder(fields: unknown[]): string[] {
   }
 
   return nextFields
-}
-
-function normalizeVisibleFields(visibleFields: unknown[], fields: string[]): string[] {
-  const normalizedVisibleFields = normalizeFieldOrder(visibleFields)
-  if (normalizedVisibleFields.length === 0) {
-    return fields
-  }
-
-  const allowedFields = new Set(fields)
-  const filteredVisibleFields = normalizedVisibleFields.filter((field) => allowedFields.has(field))
-  if (filteredVisibleFields.length === 0) {
-    return fields
-  }
-
-  return filteredVisibleFields
 }
 
 function normalizeCsvRows(rows: unknown[], fieldOrder: string[]): Record<string, string>[] {
@@ -227,28 +200,23 @@ function sortRows(rows: Record<string, string>[], field: string, direction: Sort
   })
 }
 
-function sanitizeStoredRows(rawRows: unknown[]): CacheInfo {
+async function load(projectId: string): Promise<CacheInfo> {
+  const db = await getDb()
+  if (!db.objectStoreNames.contains(projectId)) {
+    const emptyEntry: CacheInfo = { rows: [] }
+    cache = emptyEntry
+    return emptyEntry
+  }
+
+  const rawRows = await db.getAll(projectId)
   const rows: Record<string, string>[] = []
-  let fieldsFromMeta: string[] = []
-  let visibleFieldsFromMeta: string[] = []
 
   for (const row of rawRows) {
-    if (typeof row === 'object' && row !== null) {
-      const metadataCandidate = row as Record<string, unknown>
-      if (metadataCandidate[FIELD_ORDER_META_KEY] === FIELD_ORDER_META_VALUE && Array.isArray(metadataCandidate.fields)) {
-        fieldsFromMeta = normalizeFieldOrder(metadataCandidate.fields)
-        if (Array.isArray(metadataCandidate.visibleFields)) {
-          visibleFieldsFromMeta = normalizeFieldOrder(metadataCandidate.visibleFields)
-        }
-        continue
-      }
-    }
-
-    const nextRow: Record<string, string> = {}
     if (typeof row !== 'object' || row === null) {
       continue
     }
 
+    const nextRow: Record<string, string> = {}
     for (const [key, value] of Object.entries(row)) {
       if (key === 'id') {
         continue
@@ -262,45 +230,13 @@ function sanitizeStoredRows(rawRows: unknown[]): CacheInfo {
     }
   }
 
-  const fields = fieldsFromMeta.length > 0 ? fieldsFromMeta : rows.length > 0 ? Object.keys(rows[0]) : []
-  const visibleFields = normalizeVisibleFields(visibleFieldsFromMeta, fields)
-
-  return {
-    rows,
-    fields,
-    visibleFields,
-  }
-}
-
-async function load(projectId: string): Promise<CacheInfo> {
-  const db = await getDb()
-  if (!db.objectStoreNames.contains(projectId)) {
-    const emptyEntry: CacheInfo = {
-      rows: [],
-      fields: [],
-      visibleFields: [],
-    }
-    cache = emptyEntry
-    return emptyEntry
-  }
-
-  const rawRows = await db.getAll(projectId)
-  const sanitizedData = sanitizeStoredRows(rawRows)
-  const rows = sanitizedData.rows
-  const fields = sanitizedData.fields
-  const visibleFields = sanitizedData.visibleFields
-  const cacheEntry: CacheInfo = {
-    rows,
-    fields,
-    visibleFields,
-  }
+  const cacheEntry: CacheInfo = { rows }
   cache = cacheEntry
-
   return cacheEntry
 }
 
 export const dataService = {
-  async importCsv(projectId: string, csvText: string): Promise<{ totalRows: number; fields: string[]; visibleFields: string[] }> {
+  async importCsv(projectId: string, csvText: string): Promise<{ totalRows: number; fields: string[] }> {
     await ensureProjectStore(projectId)
     const parseResult = Papa.parse<Record<string, unknown>>(csvText, {
       header: true,
@@ -312,42 +248,26 @@ export const dataService = {
       throw new Error(parseResult.errors[0]?.message ?? 'Unable to parse CSV file.')
     }
 
-    const fields = normalizeFieldOrder(parseResult.meta.fields ?? [])
+    const fields = normalizeFields(parseResult.meta.fields ?? [])
     const rows = normalizeCsvRows(parseResult.data, fields)
     const db = await getDb()
     const transaction = db.transaction(projectId, 'readwrite')
     const store = transaction.objectStore(projectId)
     await store.clear()
 
-    await store.add({
-      [FIELD_ORDER_META_KEY]: FIELD_ORDER_META_VALUE,
-      fields,
-      visibleFields: fields,
-    })
-
     for (const row of rows) {
       await store.add(row)
     }
 
     await transaction.done
-    cache = {
-      rows,
-      fields,
-      visibleFields: fields,
-    }
+    cache = { rows }
 
-    return {
-      totalRows: rows.length,
-      fields,
-      visibleFields: fields,
-    }
+    return { totalRows: rows.length, fields }
   },
 
   async search(projectId: string, params: QueryProjectRowsParams): Promise<QueryProjectRowsResult> {
     const cachedEntry = cache ?? (await load(projectId))
     const rows = cachedEntry.rows
-    const fields = cachedEntry.fields
-    const visibleFields = normalizeVisibleFields(cachedEntry.visibleFields, fields)
     const activeFilters = getActiveFilters(params)
 
     let processedRows = rows
@@ -366,8 +286,6 @@ export const dataService = {
 
     return {
       rows: paginatedRows,
-      fields,
-      visibleFields,
       total: processedRows.length,
       sql: buildSqlLikeQuery(projectId, params),
     }
@@ -386,48 +304,6 @@ export const dataService = {
     return processedRows
   },
 
-  async saveVisibleFields(projectId: string, visibleFields: string[]): Promise<string[]> {
-    const db = await getDb()
-    if (!db.objectStoreNames.contains(projectId)) {
-      return []
-    }
-
-    const cachedEntry = cache ?? (await load(projectId))
-    const nextVisibleFields = normalizeVisibleFields(visibleFields, cachedEntry.fields)
-    const transaction = db.transaction(projectId, 'readwrite')
-    const store = transaction.objectStore(projectId)
-    const allRows = await store.getAll()
-    const dataRows = allRows.filter((row) => {
-      if (typeof row !== 'object' || row === null) {
-        return false
-      }
-
-      const candidate = row as Record<string, unknown>
-      return candidate[FIELD_ORDER_META_KEY] !== FIELD_ORDER_META_VALUE
-    })
-
-    await store.clear()
-    await store.add({
-      [FIELD_ORDER_META_KEY]: FIELD_ORDER_META_VALUE,
-      fields: cachedEntry.fields,
-      visibleFields: nextVisibleFields,
-    })
-
-    for (const row of dataRows) {
-      await store.add(row)
-    }
-
-    await transaction.done
-
-    cache = {
-      rows: cachedEntry.rows,
-      fields: cachedEntry.fields,
-      visibleFields: nextVisibleFields,
-    }
-
-    return nextVisibleFields
-  },
-
   async delete(projectId: string): Promise<void> {
     const db = await getDb()
     if (!db.objectStoreNames.contains(projectId)) {
@@ -440,10 +316,6 @@ export const dataService = {
 
     dbPromise = openDB(DATABASE_NAME, nextVersion, {
       upgrade(upgradeDb) {
-        if (!upgradeDb.objectStoreNames.contains(PROJECTS_STORE_NAME)) {
-          upgradeDb.createObjectStore(PROJECTS_STORE_NAME, { keyPath: 'id' })
-        }
-
         if (upgradeDb.objectStoreNames.contains(projectId)) {
           upgradeDb.deleteObjectStore(projectId)
         }

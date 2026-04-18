@@ -9,7 +9,9 @@ import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, 
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { dataService } from '@/services/dataService'
-import { type Project, type ProjectChart, projectService } from '@/services/projectService'
+import { projectService } from '@/services/projectService'
+import type { Project } from '@/entities/project'
+import type { ProjectChart } from '@/entities/projectChart'
 
 const barChartConfig = {
     count: {
@@ -153,21 +155,12 @@ function buildLineChartConfig(seriesList: LineChartSeries[]): ChartConfig {
 
 
 async function loadData(projectId: string, filterField: string, appliedFilterValue: string) {
-    const [result, loadedRows] = await Promise.all([
-        dataService.search(projectId, {
-            page: 1,
-            pageSize: 1,
-        }),
-        dataService.filter(projectId, {
-            filterField: filterField || undefined,
-            filterValue: appliedFilterValue || undefined,
-        }),
-    ])
+    const loadedRows = await dataService.filter(projectId, {
+        filterField: filterField || undefined,
+        filterValue: appliedFilterValue || undefined,
+    })
 
-    return {
-        fields: result.visibleFields,
-        rows: loadedRows,
-    }
+    return loadedRows
 }
 
 export default function ChartPage() {
@@ -201,7 +194,7 @@ export default function ChartPage() {
             }
 
             setProject(loadedProject)
-            setCharts(loadedProject?.charts ?? [])
+            setCharts(loadedProject?.Charts ?? [])
         })
 
         return () => {
@@ -210,7 +203,7 @@ export default function ChartPage() {
     }, [id])
 
     useEffect(() => {
-        const projectId = project?.id
+        const projectId = project?.Id
         if (!projectId) {
             return
         }
@@ -220,16 +213,17 @@ export default function ChartPage() {
         setErrorMessage('')
 
         loadData(projectId, filterField, appliedFilterValue)
-            .then(({ fields: loadedFields, rows: loadedRows }) => {
+            .then((loadedRows) => {
                 if (isCancelled) {
                     return
                 }
 
-                setFields(loadedFields)
+                const visibleFields = project?.VisibleFields ?? []
+                setFields(visibleFields)
                 setRows(loadedRows)
-                setCharts((previous) => previous.filter((chart) => loadedFields.includes(chart.field ?? '')))
+                setCharts((previous) => previous.filter((chart) => visibleFields.includes(chart.Field ?? '')))
 
-                if (filterField && !loadedFields.includes(filterField)) {
+                if (filterField && !visibleFields.includes(filterField)) {
                     setFilterField('')
                     setFilterInputValue('')
                     setAppliedFilterValue('')
@@ -246,7 +240,7 @@ export default function ChartPage() {
         return () => {
             isCancelled = true
         }
-    }, [appliedFilterValue, filterField, project?.id])
+    }, [appliedFilterValue, filterField, project?.Id])
 
     const onOpenAddChartDialog = () => {
         if (fields.length === 0) {
@@ -287,23 +281,23 @@ export default function ChartPage() {
     }
 
     const onOpenEditChartDialog = (chart: ProjectChart) => {
-        if (!chart.field) {
+        if (!chart.Field) {
             return
         }
 
         setChartDialogMode('edit')
-        setChartDialogType(chart.type)
-        setActiveChartId(chart.id)
-        setSelectedChartField(chart.field)
+        setChartDialogType(chart.Type)
+        setActiveChartId(chart.Id)
+        setSelectedChartField(chart.Field ?? '')
         setIsChartDialogOpen(true)
     }
 
     const onDeleteChart = (chartId: string) => {
         setCharts((previous) => {
-            const nextCharts = previous.filter((chart) => chart.id !== chartId)
+            const nextCharts = previous.filter((chart) => chart.Id !== chartId)
 
             if (project) {
-                void projectService.setCharts(project.id, nextCharts)
+                void projectService.setCharts(project.Id, nextCharts)
             }
 
             return nextCharts
@@ -321,8 +315,8 @@ export default function ChartPage() {
 
         if (chartDialogMode === 'create') {
             setCharts((previous) => {
-                const nextCharts: ProjectChart[] = [...previous, { id: createChartId(), type: chartDialogType, field: selectedChartField }]
-                void projectService.setCharts(project.id, nextCharts)
+                const nextCharts: ProjectChart[] = [...previous, { Id: createChartId(), Type: chartDialogType, Field: selectedChartField }]
+                void projectService.setCharts(project.Id, nextCharts)
                 return nextCharts
             })
             setIsChartDialogOpen(false)
@@ -335,7 +329,7 @@ export default function ChartPage() {
 
         setCharts((previous) => {
             const nextCharts = previous.map((chart) => {
-                if (chart.id !== activeChartId) {
+                if (chart.Id !== activeChartId) {
                     return chart
                 }
 
@@ -344,7 +338,7 @@ export default function ChartPage() {
                     field: selectedChartField,
                 }
             })
-            void projectService.setCharts(project.id, nextCharts)
+            void projectService.setCharts(project.Id, nextCharts)
             return nextCharts
         })
         setIsChartDialogOpen(false)
@@ -354,11 +348,11 @@ export default function ChartPage() {
         const next = new Map<string, Array<{ value: string; count: number }>>()
 
         for (const chart of charts) {
-            if (chart.type !== 'bar' || !chart.field) {
+            if (chart.Type !== 'bar' || !chart.Field) {
                 continue
             }
 
-            next.set(chart.id, buildFieldCountChartData(rows, chart.field))
+            next.set(chart.Id, buildFieldCountChartData(rows, chart.Field))
         }
 
         return next
@@ -368,12 +362,12 @@ export default function ChartPage() {
         const next = new Map<string, LineChartModel>()
 
         for (const chart of charts) {
-            if (chart.type !== 'line' || !chart.field) {
+            if (chart.Type !== 'line' || !chart.Field) {
                 continue
             }
 
-            const lineModel = buildLineChartData(rows, fields, chart.field)
-            next.set(chart.id, lineModel)
+            const lineModel = buildLineChartData(rows, fields, chart.Field)
+            next.set(chart.Id, lineModel)
         }
 
         return next
@@ -383,12 +377,12 @@ export default function ChartPage() {
         const next = new Map<string, ChartConfig>()
 
         for (const chart of charts) {
-            if (chart.type !== 'line') {
+            if (chart.Type !== 'line') {
                 continue
             }
 
-            const lineModel = lineChartDataById.get(chart.id)
-            next.set(chart.id, buildLineChartConfig(lineModel?.series ?? []))
+            const lineModel = lineChartDataById.get(chart.Id)
+            next.set(chart.Id, buildLineChartConfig(lineModel?.series ?? []))
         }
 
         return next
@@ -399,19 +393,19 @@ export default function ChartPage() {
             const next: Record<string, Record<string, boolean>> = {}
 
             for (const chart of charts) {
-                if (chart.type !== 'line') {
+                if (chart.Type !== 'line') {
                     continue
                 }
 
-                const lineModel = lineChartDataById.get(chart.id)
-                const previousVisibility = previous[chart.id] ?? {}
+                const lineModel = lineChartDataById.get(chart.Id)
+                const previousVisibility = previous[chart.Id] ?? {}
                 const nextVisibility: Record<string, boolean> = {}
 
                 for (const series of lineModel?.series ?? []) {
                     nextVisibility[series.key] = previousVisibility[series.key] ?? true
                 }
 
-                next[chart.id] = nextVisibility
+                next[chart.Id] = nextVisibility
             }
 
             return next
@@ -551,22 +545,22 @@ export default function ChartPage() {
             {charts.length > 0 ? (
                 <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     {charts.map((chart) => {
-                        if (chart.type === 'line') {
-                            const lineModel = lineChartDataById.get(chart.id) ?? { data: [], series: [] }
-                            const chartConfig = lineChartConfigById.get(chart.id) ?? {}
-                            const seriesVisibility = lineSeriesVisibilityByChartId[chart.id] ?? {}
+                        if (chart.Type === 'line') {
+                            const lineModel = lineChartDataById.get(chart.Id) ?? { data: [], series: [] }
+                            const chartConfig = lineChartConfigById.get(chart.Id) ?? {}
+                            const seriesVisibility = lineSeriesVisibilityByChartId[chart.Id] ?? {}
 
                             return (
-                                <Card key={chart.id} className="gap-3 py-4">
+                                <Card key={chart.Id} className="gap-3 py-4">
                                     <CardHeader className="flex flex-row items-start justify-between gap-3 px-4">
                                         <div className="space-y-1">
-                                            <CardTitle>Line chart: {chart.field ?? ''}</CardTitle>
+                                            <CardTitle>Line chart: {chart.Field ?? ''}</CardTitle>
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <Button type="button" size="icon-sm" variant="outline" onClick={() => onOpenEditChartDialog(chart)} aria-label="Edit chart">
                                                 <Pencil />
                                             </Button>
-                                            <Button type="button" size="icon-sm" variant="outline" onClick={() => onDeleteChart(chart.id)} aria-label="Delete chart">
+                                            <Button type="button" size="icon-sm" variant="outline" onClick={() => onDeleteChart(chart.Id)} aria-label="Delete chart">
                                                 <Trash2 />
                                             </Button>
                                         </div>
@@ -614,7 +608,7 @@ export default function ChartPage() {
                                                                     <input
                                                                         type="checkbox"
                                                                         checked={isVisible}
-                                                                        onChange={() => onToggleLineSeriesVisibility(chart.id, series.key)}
+                                                                        onChange={() => onToggleLineSeriesVisibility(chart.Id, series.key)}
                                                                     />
                                                                     <span className="size-2.5 rounded-full" style={{ backgroundColor: series.color }} />
                                                                     <span className="truncate" title={series.label}>
@@ -634,19 +628,19 @@ export default function ChartPage() {
                             )
                         }
 
-                        const chartData = barChartDataById.get(chart.id) ?? []
+                        const chartData = barChartDataById.get(chart.Id) ?? []
 
                         return (
-                            <Card key={chart.id} className="gap-3 py-4">
+                            <Card key={chart.Id} className="gap-3 py-4">
                                 <CardHeader className="flex flex-row items-start justify-between gap-3 px-4">
                                     <div className="space-y-1">
-                                        <CardTitle>{chart.field ?? ''}</CardTitle>
+                                        <CardTitle>{chart.Field ?? ''}</CardTitle>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <Button type="button" size="icon-sm" variant="outline" onClick={() => onOpenEditChartDialog(chart)} aria-label="Edit chart">
                                             <Pencil />
                                         </Button>
-                                        <Button type="button" size="icon-sm" variant="outline" onClick={() => onDeleteChart(chart.id)} aria-label="Delete chart">
+                                        <Button type="button" size="icon-sm" variant="outline" onClick={() => onDeleteChart(chart.Id)} aria-label="Delete chart">
                                             <Trash2 />
                                         </Button>
                                     </div>

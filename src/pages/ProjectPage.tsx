@@ -8,7 +8,8 @@ import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
 import { dataService, type SortDirection } from '@/services/dataService'
-import { type Project, projectService } from '@/services/projectService'
+import { projectService } from '@/services/projectService'
+import type { Project } from '@/entities/project'
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50] as const
 
@@ -16,8 +17,6 @@ export default function ProjectPage() {
     const { id = '' } = useParams()
     const [project, setProject] = useState<Project | undefined>()
     const [rows, setRows] = useState<Record<string, string>[]>([])
-    const [fields, setFields] = useState<string[]>([])
-    const [visibleFields, setVisibleFields] = useState<string[]>([])
     const [totalRows, setTotalRows] = useState(0)
     const [page, setPage] = useState(1)
     const [pageSize, setPageSize] = useState<number>(PAGE_SIZE_OPTIONS[0])
@@ -26,7 +25,6 @@ export default function ProjectPage() {
     const [appliedFilters, setAppliedFilters] = useState<Record<string, string>>({})
     const [filterInputs, setFilterInputs] = useState<Record<string, string>>({})
     const filterDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-    const visibleFieldsRef = useRef<string[]>([])
     const [sqlPreview, setSqlPreview] = useState('')
     const [selectedRow, setSelectedRow] = useState<Record<string, string> | null>(null)
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
@@ -54,8 +52,8 @@ export default function ProjectPage() {
             }
 
             setProject(loadedProject)
-            setEditProjectName(loadedProject?.name ?? '')
-            setEditProjectDescription(loadedProject?.description ?? '')
+            setEditProjectName(loadedProject?.Name ?? '')
+            setEditProjectDescription(loadedProject?.Description ?? '')
         }
 
         void loadProject()
@@ -66,7 +64,7 @@ export default function ProjectPage() {
     }, [id])
 
     const loadData = useCallback(async (isCancelled?: () => boolean) => {
-        const projectId = project?.id
+        const projectId = project?.Id
         if (!projectId) {
             return
         }
@@ -88,8 +86,6 @@ export default function ProjectPage() {
             }
 
             setRows(result.rows)
-            setFields(result.fields)
-            setVisibleFields(result.visibleFields)
             setTotalRows(result.total)
             setSqlPreview(result.sql)
             setSelectedRow(null)
@@ -104,7 +100,7 @@ export default function ProjectPage() {
                 setIsLoadingRows(false)
             }
         }
-    }, [appliedFilters, page, pageSize, project?.id, sortDirection, sortField])
+    }, [appliedFilters, page, pageSize, project?.Id, sortDirection, sortField])
 
     useEffect(() => {
         let isCancelled = false
@@ -131,10 +127,12 @@ export default function ProjectPage() {
 
         try {
             const csvText = await file.text()
-            const importResult = await dataService.importCsv(project.id, csvText)
+            const importResult = await dataService.importCsv(project.Id, csvText)
+            const updatedProject = await projectService.setFieldMeta(project.Id, importResult.fields ?? [], importResult.fields ?? [])
+            if (updatedProject) {
+                setProject(updatedProject)
+            }
 
-            setFields(importResult.fields)
-            setVisibleFields(importResult.visibleFields)
             setSortField('')
             setAppliedFilters({})
             setFilterInputs({})
@@ -154,15 +152,15 @@ export default function ProjectPage() {
             return
         }
 
-        setEditProjectName(project.name)
-        setEditProjectDescription(project.description)
+        setEditProjectName(project.Name)
+        setEditProjectDescription(project.Description)
         setIsEditDialogOpen(true)
     }
 
     const onCancelEditProject = () => {
         setIsEditDialogOpen(false)
-        setEditProjectName(project?.name ?? '')
-        setEditProjectDescription(project?.description ?? '')
+        setEditProjectName(project?.Name ?? '')
+        setEditProjectDescription(project?.Description ?? '')
     }
 
     const onSaveEditProject = async () => {
@@ -170,7 +168,7 @@ export default function ProjectPage() {
             return
         }
 
-        const updatedProject = await projectService.updateProject(project.id, {
+        const updatedProject = await projectService.updateProject(project.Id, {
             name: editProjectName,
             description: editProjectDescription,
         })
@@ -202,10 +200,6 @@ export default function ProjectPage() {
     }
 
     useEffect(() => {
-        visibleFieldsRef.current = visibleFields
-    }, [visibleFields])
-
-    useEffect(() => {
         if (filterDebounceRef.current) {
             clearTimeout(filterDebounceRef.current)
         }
@@ -213,7 +207,7 @@ export default function ProjectPage() {
         filterDebounceRef.current = setTimeout(() => {
             const normalizedFilters: Record<string, string> = {}
 
-            for (const field of visibleFieldsRef.current) {
+            for (const field of project?.VisibleFields ?? []) {
                 const value = filterInputs[field]?.trim() ?? ''
                 if (value) {
                     normalizedFilters[field] = value
@@ -229,7 +223,7 @@ export default function ProjectPage() {
                 clearTimeout(filterDebounceRef.current)
             }
         }
-    }, [filterInputs])
+    }, [filterInputs, project?.VisibleFields])
 
     const onApplyFilters = () => {
         if (filterDebounceRef.current) {
@@ -238,7 +232,7 @@ export default function ProjectPage() {
 
         const normalizedFilters: Record<string, string> = {}
 
-        for (const field of visibleFields) {
+        for (const field of project?.VisibleFields ?? []) {
             const value = filterInputs[field]?.trim() ?? ''
             if (value) {
                 normalizedFilters[field] = value
@@ -257,9 +251,9 @@ export default function ProjectPage() {
 
     const onOpenColumnsDialog = () => {
         const nextMap: Record<string, boolean> = {}
-        const selectedFieldSet = new Set(visibleFields)
+        const selectedFieldSet = new Set(project?.VisibleFields ?? [])
 
-        for (const field of fields) {
+        for (const field of project?.Fields ?? []) {
             nextMap[field] = selectedFieldSet.has(field)
         }
 
@@ -274,17 +268,21 @@ export default function ProjectPage() {
         }))
     }
 
-    const selectedPendingFields = fields.filter((field) => pendingVisibleFieldMap[field])
+    const selectedPendingFields = (project?.Fields ?? []).filter((field) => pendingVisibleFieldMap[field])
 
     const onApplyVisibleFields = async () => {
         if (!project) {
             return
         }
 
-        const savedVisibleFields = await dataService.saveVisibleFields(project.id, selectedPendingFields)
-        const visibleFieldSet = new Set(savedVisibleFields)
+        const updatedProject = await projectService.setFieldMeta(project.Id, project.Fields, selectedPendingFields)
+        if (!updatedProject) {
+            return
+        }
 
-        setVisibleFields(savedVisibleFields)
+        setProject(updatedProject)
+
+        const visibleFieldSet = new Set(updatedProject.VisibleFields)
         setAppliedFilters((previous) => {
             const nextFilters: Record<string, string> = {}
             for (const [field, value] of Object.entries(previous)) {
@@ -321,8 +319,8 @@ export default function ProjectPage() {
                 <section className="flex flex-col gap-4">
                     <header className="flex items-center gap-2">
                         <div className="flex flex-col gap-1">
-                            <h1 className="text-2xl font-semibold">{project.name}</h1>
-                            {project.description ? <p className="text-sm text-muted-foreground">{project.description}</p> : null}
+                            <h1 className="text-2xl font-semibold">{project.Name}</h1>
+                            {project.Description ? <p className="text-sm text-muted-foreground">{project.Description}</p> : null}
                         </div>
                         <Button type="button" variant="ghost" size="icon-sm" aria-label="Edit project" onClick={onOpenEditDialog}>
                             <Pencil />
@@ -335,7 +333,7 @@ export default function ProjectPage() {
                             variant="outline"
                             size="sm"
                             onClick={onResetFilters}
-                            disabled={fields.length === 0}
+                            disabled={project.Fields.length === 0}
                             aria-label="Reset all filters"
                         >
                             <RotateCcw />
@@ -346,7 +344,7 @@ export default function ProjectPage() {
                             variant="outline"
                             size="sm"
                             onClick={onOpenColumnsDialog}
-                            disabled={fields.length === 0}
+                            disabled={project.Fields.length === 0}
                             aria-label="Select visible columns"
                         >
                             <Columns3 />
@@ -367,7 +365,7 @@ export default function ProjectPage() {
                                 <Table className="table-auto">
                                     <TableHeader>
                                         <TableRow>
-                                            {visibleFields.map((field) => (
+                                            {project.VisibleFields.map((field) => (
                                                 <TableHead key={field} className="px-3 py-2">
                                                     <div className="flex flex-col gap-2">
                                                         <button
@@ -410,13 +408,13 @@ export default function ProjectPage() {
                                     <TableBody>
                                         {isLoadingRows ? (
                                             <TableRow>
-                                                <TableCell colSpan={Math.max(visibleFields.length, 1)} className="px-3 py-4 text-center text-muted-foreground">
+                                                <TableCell colSpan={Math.max(project.VisibleFields.length, 1)} className="px-3 py-4 text-center text-muted-foreground">
                                                     Loading...
                                                 </TableCell>
                                             </TableRow>
                                         ) : rows.length === 0 ? (
                                             <TableRow>
-                                                <TableCell colSpan={Math.max(visibleFields.length, 1)} className="px-3 py-4 text-center text-muted-foreground">
+                                                <TableCell colSpan={Math.max(project.VisibleFields.length, 1)} className="px-3 py-4 text-center text-muted-foreground">
                                                     No data available.
                                                 </TableCell>
                                             </TableRow>
@@ -430,7 +428,7 @@ export default function ProjectPage() {
                                                         className={`cursor-pointer ${isSelected ? 'bg-accent/70' : 'hover:bg-accent/40'}`}
                                                         onClick={() => setSelectedRow(row)}
                                                     >
-                                                        {visibleFields.map((field) => (
+                                                        {project.VisibleFields.map((field) => (
                                                             <TableCell key={`${rowIndex}-${field}`} className="px-3 py-2 align-top whitespace-normal">
                                                                 <div
                                                                     className="w-fit max-w-56 overflow-hidden text-ellipsis whitespace-nowrap"
@@ -505,7 +503,7 @@ export default function ProjectPage() {
                                 </div>
 
                                 <div className="flex max-h-[70vh] flex-col gap-3 overflow-auto pr-1">
-                                    {fields.map((field) => (
+                                {project.Fields.map((field) => (
                                         <div key={field} className="space-y-1">
                                             <p className="text-xs font-medium text-muted-foreground">{field}</p>
                                             <p className="whitespace-pre-wrap break-words text-sm">{selectedRow[field] || '-'}</p>
@@ -522,70 +520,75 @@ export default function ProjectPage() {
 
             <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
                 <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Edit project</DialogTitle>
-                        <DialogDescription>Update project information.</DialogDescription>
-                    </DialogHeader>
+                    <form onSubmit={(event) => {
+                        event.preventDefault()
+                        onSaveEditProject()
+                    }}>
+                        <DialogHeader>
+                            <DialogTitle>Edit project</DialogTitle>
+                            <DialogDescription>Update project information.</DialogDescription>
+                        </DialogHeader>
 
-                    <Input
-                        placeholder="Project name"
-                        value={editProjectName}
-                        onChange={(event) => setEditProjectName(event.target.value)}
-                        onKeyDown={(event) => {
-                            if (event.key === 'Enter') {
-                                onSaveEditProject()
-                            }
-                        }}
-                        autoFocus
-                    />
+                        <Input
+                            placeholder="Project name"
+                            value={editProjectName}
+                            onChange={(event) => setEditProjectName(event.target.value)}
+                            autoFocus
+                        />
 
-                    <Textarea placeholder="Description" value={editProjectDescription} onChange={(event) => setEditProjectDescription(event.target.value)} />
+                        <Textarea placeholder="Description" value={editProjectDescription} onChange={(event) => setEditProjectDescription(event.target.value)} />
 
-                    <DialogFooter>
-                        <Button type="button" variant="outline" onClick={onCancelEditProject}>
-                            Cancel
-                        </Button>
-                        <Button type="button" onClick={onSaveEditProject} disabled={!editProjectName.trim()}>
-                            Save
-                        </Button>
-                    </DialogFooter>
+                        <DialogFooter>
+                            <Button type="button" variant="outline" onClick={onCancelEditProject}>
+                                Cancel
+                            </Button>
+                            <Button type="submit" disabled={!editProjectName.trim()}>
+                                Save
+                            </Button>
+                        </DialogFooter>
+                    </form>
                 </DialogContent>
             </Dialog>
 
             <Dialog modal={false} open={isColumnsDialogOpen} onOpenChange={setIsColumnsDialogOpen}>
                 <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Visible columns</DialogTitle>
-                        <DialogDescription>Select columns to display in the table.</DialogDescription>
-                    </DialogHeader>
+                    <form onSubmit={(event) => {
+                        event.preventDefault()
+                        onApplyVisibleFields()
+                    }}>
+                        <DialogHeader>
+                            <DialogTitle>Visible columns</DialogTitle>
+                            <DialogDescription>Select columns to display in the table.</DialogDescription>
+                        </DialogHeader>
 
-                    <div className="max-h-72 space-y-2 overflow-auto pr-1">
-                        {fields.length === 0 ? (
-                            <p className="text-sm text-muted-foreground">No columns available.</p>
-                        ) : (
-                            fields.map((field) => (
-                                <label key={field} className="flex items-center gap-2 text-sm">
-                                    <input
-                                        type="checkbox"
-                                        checked={pendingVisibleFieldMap[field] ?? false}
-                                        onChange={() => onTogglePendingVisibleField(field)}
-                                    />
-                                    <span className="truncate" title={field}>
-                                        {field}
-                                    </span>
-                                </label>
-                            ))
-                        )}
-                    </div>
+                        <div className="max-h-72 space-y-2 overflow-auto pr-1">
+                            {(project?.Fields.length ?? 0) === 0 ? (
+                                <p className="text-sm text-muted-foreground">No columns available.</p>
+                            ) : (
+                                (project?.Fields ?? []).map((field) => (
+                                    <label key={field} className="flex items-center gap-2 text-sm">
+                                        <input
+                                            type="checkbox"
+                                            checked={pendingVisibleFieldMap[field] ?? false}
+                                            onChange={() => onTogglePendingVisibleField(field)}
+                                        />
+                                        <span className="truncate" title={field}>
+                                            {field}
+                                        </span>
+                                    </label>
+                                ))
+                            )}
+                        </div>
 
-                    <DialogFooter>
-                        <Button type="button" variant="outline" onClick={() => setIsColumnsDialogOpen(false)}>
-                            Cancel
-                        </Button>
-                        <Button type="button" onClick={onApplyVisibleFields} disabled={selectedPendingFields.length === 0}>
-                            Apply
-                        </Button>
-                    </DialogFooter>
+                        <DialogFooter>
+                            <Button type="button" variant="outline" onClick={() => setIsColumnsDialogOpen(false)}>
+                                Cancel
+                            </Button>
+                            <Button type="submit" disabled={selectedPendingFields.length === 0}>
+                                Apply
+                            </Button>
+                        </DialogFooter>
+                    </form>
                 </DialogContent>
             </Dialog>
         </main>

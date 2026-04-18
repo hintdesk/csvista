@@ -25,7 +25,7 @@ export default function ProjectListPage() {
 
   const onDeleteProject = (event: MouseEvent<HTMLButtonElement>, id: string) => {
     event.stopPropagation()
-    const project = projects.find((item) => item.id === id)
+    const project = projects.find((item) => item.Id === id)
     if (!project) {
       return
     }
@@ -39,8 +39,8 @@ export default function ProjectListPage() {
       return
     }
 
-    await dataService.delete(pendingDeleteProject.id)
-    await projectService.deleteProject(pendingDeleteProject.id)
+    await dataService.delete(pendingDeleteProject.Id)
+    await projectService.deleteProject(pendingDeleteProject.Id)
     await queryClient.invalidateQueries({ queryKey: ['projects'] })
     setPendingDeleteProject(null)
     setIsDeleteDialogOpen(false)
@@ -97,26 +97,26 @@ export default function ProjectListPage() {
         ) : (
           projects.map((project) => (
             <Card
-              key={project.id}
+              key={project.Id}
               role="button"
               tabIndex={0}
-              onClick={() => onOpenProject(project.id)}
+              onClick={() => onOpenProject(project.Id)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' || event.key === ' ') {
                   event.preventDefault()
-                  onOpenProject(project.id)
+                  onOpenProject(project.Id)
                 }
               }}
               className="rounded-none border-x-0 border-t-0 border-b px-4 py-3 shadow-none transition-colors hover:bg-accent/60 last:border-b-0"
             >
               <CardContent className="flex items-center justify-between px-0 py-0">
-                <span className="truncate">{project.name}</span>
+                <span className="truncate">{project.Name}</span>
                 <Button
                   type="button"
                   variant="outline"
                   size="icon-sm"
-                  aria-label={`Delete project ${project.name}`}
-                  onClick={(event) => onDeleteProject(event, project.id)}
+                  aria-label={`Delete project ${project.Name}`}
+                  onClick={(event) => onDeleteProject(event, project.Id)}
                 >
                   <Trash />
                 </Button>
@@ -167,7 +167,7 @@ export default function ProjectListPage() {
           <DialogHeader>
             <DialogTitle>Delete project</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete &quot;{pendingDeleteProject?.name ?? ''}&quot;?
+              Are you sure you want to delete &quot;{pendingDeleteProject?.Name ?? ''}&quot;?
             </DialogDescription>
           </DialogHeader>
 

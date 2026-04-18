@@ -58,7 +58,7 @@ function App() {
             </Link>
             <span>→</span>
             <Link to={`/project/${currentProjectId}`} className="text-foreground hover:underline">
-              {currentProject?.name ?? currentProjectId}
+              {currentProject?.Name ?? currentProjectId}
             </Link>
             <span>→</span>
             <Link
