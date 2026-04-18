@@ -12,31 +12,6 @@ import { type Project, projectService } from '@/services/projectService'
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50] as const
 
-function areStringArraysEqual(left: string[], right: string[]): boolean {
-    if (left.length !== right.length) {
-        return false
-    }
-
-    return left.every((item, index) => item === right[index])
-}
-
-function areFilterMapsEqual(left: Record<string, string>, right: Record<string, string>): boolean {
-    const leftEntries = Object.entries(left)
-    const rightEntries = Object.entries(right)
-
-    if (leftEntries.length !== rightEntries.length) {
-        return false
-    }
-
-    for (const [key, value] of leftEntries) {
-        if (right[key] !== value) {
-            return false
-        }
-    }
-
-    return true
-}
-
 export default function ProjectPage() {
     const { id = '' } = useParams()
     const [project, setProject] = useState<Project | undefined>()
@@ -113,8 +88,8 @@ export default function ProjectPage() {
             }
 
             setRows(result.rows)
-            setFields((previous) => (areStringArraysEqual(previous, result.fields) ? previous : result.fields))
-            setVisibleFields((previous) => (areStringArraysEqual(previous, result.visibleFields) ? previous : result.visibleFields))
+            setFields(result.fields)
+            setVisibleFields(result.visibleFields)
             setTotalRows(result.total)
             setSqlPreview(result.sql)
             setSelectedRow(null)
@@ -245,19 +220,8 @@ export default function ProjectPage() {
                 }
             }
 
-            let didChangeFilters = false
-            setAppliedFilters((previous) => {
-                if (areFilterMapsEqual(previous, normalizedFilters)) {
-                    return previous
-                }
-
-                didChangeFilters = true
-                return normalizedFilters
-            })
-
-            if (didChangeFilters) {
-                setPage(1)
-            }
+            setAppliedFilters(normalizedFilters)
+            setPage(1)
         }, 600)
 
         return () => {
@@ -281,10 +245,8 @@ export default function ProjectPage() {
             }
         }
 
-        if (!areFilterMapsEqual(appliedFilters, normalizedFilters)) {
-            setAppliedFilters(normalizedFilters)
-            setPage(1)
-        }
+        setAppliedFilters(normalizedFilters)
+        setPage(1)
     }
 
     const onResetFilters = () => {
