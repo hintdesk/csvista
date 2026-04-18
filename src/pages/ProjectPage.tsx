@@ -562,7 +562,7 @@ export default function ProjectPage() {
                             <DialogDescription>Select columns to display in the table.</DialogDescription>
                         </DialogHeader>
 
-                        <div className="max-h-72 space-y-2 overflow-auto pr-1">
+                        <div className="mt-3 max-h-72 space-y-2 overflow-auto pr-1">
                             {(project?.Fields.length ?? 0) === 0 ? (
                                 <p className="text-sm text-muted-foreground">No columns available.</p>
                             ) : (
