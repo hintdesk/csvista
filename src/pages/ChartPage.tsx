@@ -165,7 +165,7 @@ async function loadData(projectId: string, filterField: string, appliedFilterVal
     ])
 
     return {
-        fields: result.fields,
+        fields: result.visibleFields,
         rows: loadedRows,
     }
 }
@@ -228,6 +228,12 @@ export default function ChartPage() {
                 setFields(loadedFields)
                 setRows(loadedRows)
                 setCharts((previous) => previous.filter((chart) => loadedFields.includes(chart.field ?? '')))
+
+                if (filterField && !loadedFields.includes(filterField)) {
+                    setFilterField('')
+                    setFilterInputValue('')
+                    setAppliedFilterValue('')
+                }
             })
             .catch((error: unknown) => {
                 if (isCancelled) {

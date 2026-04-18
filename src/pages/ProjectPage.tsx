@@ -1,5 +1,5 @@
 import { type ChangeEvent, useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowDown, ArrowUp, FileSpreadsheet, RotateCcw, Pencil, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, Columns3, FileSpreadsheet, RotateCcw, Pencil, X } from 'lucide-react'
 import { useParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from '@/components/ui/combobox'
@@ -12,11 +12,37 @@ import { type Project, projectService } from '@/services/projectService'
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50] as const
 
+function areStringArraysEqual(left: string[], right: string[]): boolean {
+    if (left.length !== right.length) {
+        return false
+    }
+
+    return left.every((item, index) => item === right[index])
+}
+
+function areFilterMapsEqual(left: Record<string, string>, right: Record<string, string>): boolean {
+    const leftEntries = Object.entries(left)
+    const rightEntries = Object.entries(right)
+
+    if (leftEntries.length !== rightEntries.length) {
+        return false
+    }
+
+    for (const [key, value] of leftEntries) {
+        if (right[key] !== value) {
+            return false
+        }
+    }
+
+    return true
+}
+
 export default function ProjectPage() {
     const { id = '' } = useParams()
     const [project, setProject] = useState<Project | undefined>()
     const [rows, setRows] = useState<Record<string, string>[]>([])
     const [fields, setFields] = useState<string[]>([])
+    const [visibleFields, setVisibleFields] = useState<string[]>([])
     const [totalRows, setTotalRows] = useState(0)
     const [page, setPage] = useState(1)
     const [pageSize, setPageSize] = useState<number>(PAGE_SIZE_OPTIONS[0])
@@ -25,9 +51,12 @@ export default function ProjectPage() {
     const [appliedFilters, setAppliedFilters] = useState<Record<string, string>>({})
     const [filterInputs, setFilterInputs] = useState<Record<string, string>>({})
     const filterDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const visibleFieldsRef = useRef<string[]>([])
     const [sqlPreview, setSqlPreview] = useState('')
     const [selectedRow, setSelectedRow] = useState<Record<string, string> | null>(null)
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+    const [isColumnsDialogOpen, setIsColumnsDialogOpen] = useState(false)
+    const [pendingVisibleFieldMap, setPendingVisibleFieldMap] = useState<Record<string, boolean>>({})
     const [editProjectName, setEditProjectName] = useState('')
     const [editProjectDescription, setEditProjectDescription] = useState('')
     const [isLoadingRows, setIsLoadingRows] = useState(false)
@@ -84,7 +113,8 @@ export default function ProjectPage() {
             }
 
             setRows(result.rows)
-            setFields(result.fields)
+            setFields((previous) => (areStringArraysEqual(previous, result.fields) ? previous : result.fields))
+            setVisibleFields((previous) => (areStringArraysEqual(previous, result.visibleFields) ? previous : result.visibleFields))
             setTotalRows(result.total)
             setSqlPreview(result.sql)
             setSelectedRow(null)
@@ -129,6 +159,7 @@ export default function ProjectPage() {
             const importResult = await dataService.importCsv(project.id, csvText)
 
             setFields(importResult.fields)
+            setVisibleFields(importResult.visibleFields)
             setSortField('')
             setAppliedFilters({})
             setFilterInputs({})
@@ -196,6 +227,10 @@ export default function ProjectPage() {
     }
 
     useEffect(() => {
+        visibleFieldsRef.current = visibleFields
+    }, [visibleFields])
+
+    useEffect(() => {
         if (filterDebounceRef.current) {
             clearTimeout(filterDebounceRef.current)
         }
@@ -203,15 +238,26 @@ export default function ProjectPage() {
         filterDebounceRef.current = setTimeout(() => {
             const normalizedFilters: Record<string, string> = {}
 
-            for (const field of fields) {
+            for (const field of visibleFieldsRef.current) {
                 const value = filterInputs[field]?.trim() ?? ''
                 if (value) {
                     normalizedFilters[field] = value
                 }
             }
 
-            setAppliedFilters(normalizedFilters)
-            setPage(1)
+            let didChangeFilters = false
+            setAppliedFilters((previous) => {
+                if (areFilterMapsEqual(previous, normalizedFilters)) {
+                    return previous
+                }
+
+                didChangeFilters = true
+                return normalizedFilters
+            })
+
+            if (didChangeFilters) {
+                setPage(1)
+            }
         }, 600)
 
         return () => {
@@ -219,7 +265,7 @@ export default function ProjectPage() {
                 clearTimeout(filterDebounceRef.current)
             }
         }
-    }, [filterInputs, fields])
+    }, [filterInputs])
 
     const onApplyFilters = () => {
         if (filterDebounceRef.current) {
@@ -228,21 +274,83 @@ export default function ProjectPage() {
 
         const normalizedFilters: Record<string, string> = {}
 
-        for (const field of fields) {
+        for (const field of visibleFields) {
             const value = filterInputs[field]?.trim() ?? ''
             if (value) {
                 normalizedFilters[field] = value
             }
         }
 
-        setAppliedFilters(normalizedFilters)
-        setPage(1)
+        if (!areFilterMapsEqual(appliedFilters, normalizedFilters)) {
+            setAppliedFilters(normalizedFilters)
+            setPage(1)
+        }
     }
 
     const onResetFilters = () => {
         setAppliedFilters({})
         setFilterInputs({})
         setPage(1)
+    }
+
+    const onOpenColumnsDialog = () => {
+        const nextMap: Record<string, boolean> = {}
+        const selectedFieldSet = new Set(visibleFields)
+
+        for (const field of fields) {
+            nextMap[field] = selectedFieldSet.has(field)
+        }
+
+        setPendingVisibleFieldMap(nextMap)
+        setIsColumnsDialogOpen(true)
+    }
+
+    const onTogglePendingVisibleField = (field: string) => {
+        setPendingVisibleFieldMap((previous) => ({
+            ...previous,
+            [field]: !previous[field],
+        }))
+    }
+
+    const selectedPendingFields = fields.filter((field) => pendingVisibleFieldMap[field])
+
+    const onApplyVisibleFields = async () => {
+        if (!project) {
+            return
+        }
+
+        const savedVisibleFields = await dataService.saveVisibleFields(project.id, selectedPendingFields)
+        const visibleFieldSet = new Set(savedVisibleFields)
+
+        setVisibleFields(savedVisibleFields)
+        setAppliedFilters((previous) => {
+            const nextFilters: Record<string, string> = {}
+            for (const [field, value] of Object.entries(previous)) {
+                if (visibleFieldSet.has(field)) {
+                    nextFilters[field] = value
+                }
+            }
+
+            return nextFilters
+        })
+        setFilterInputs((previous) => {
+            const nextInputs: Record<string, string> = {}
+            for (const [field, value] of Object.entries(previous)) {
+                if (visibleFieldSet.has(field)) {
+                    nextInputs[field] = value
+                }
+            }
+
+            return nextInputs
+        })
+
+        if (sortField && !visibleFieldSet.has(sortField)) {
+            setSortField('')
+            setSortDirection('asc')
+        }
+
+        setPage(1)
+        setIsColumnsDialogOpen(false)
     }
 
     return (
@@ -271,6 +379,17 @@ export default function ProjectPage() {
                             <RotateCcw />
                             <span>Reset filter</span>
                         </Button>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={onOpenColumnsDialog}
+                            disabled={fields.length === 0}
+                            aria-label="Select visible columns"
+                        >
+                            <Columns3 />
+                            <span>Columns</span>
+                        </Button>
                         <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={isImporting} aria-label="Import data">
                             <FileSpreadsheet />
                             <span>Import</span>
@@ -286,7 +405,7 @@ export default function ProjectPage() {
                                 <Table className="table-auto">
                                     <TableHeader>
                                         <TableRow>
-                                            {fields.map((field) => (
+                                            {visibleFields.map((field) => (
                                                 <TableHead key={field} className="px-3 py-2">
                                                     <div className="flex flex-col gap-2">
                                                         <button
@@ -329,13 +448,13 @@ export default function ProjectPage() {
                                     <TableBody>
                                         {isLoadingRows ? (
                                             <TableRow>
-                                                <TableCell colSpan={Math.max(fields.length, 1)} className="px-3 py-4 text-center text-muted-foreground">
+                                                <TableCell colSpan={Math.max(visibleFields.length, 1)} className="px-3 py-4 text-center text-muted-foreground">
                                                     Loading...
                                                 </TableCell>
                                             </TableRow>
                                         ) : rows.length === 0 ? (
                                             <TableRow>
-                                                <TableCell colSpan={Math.max(fields.length, 1)} className="px-3 py-4 text-center text-muted-foreground">
+                                                <TableCell colSpan={Math.max(visibleFields.length, 1)} className="px-3 py-4 text-center text-muted-foreground">
                                                     No data available.
                                                 </TableCell>
                                             </TableRow>
@@ -349,7 +468,7 @@ export default function ProjectPage() {
                                                         className={`cursor-pointer ${isSelected ? 'bg-accent/70' : 'hover:bg-accent/40'}`}
                                                         onClick={() => setSelectedRow(row)}
                                                     >
-                                                        {fields.map((field) => (
+                                                        {visibleFields.map((field) => (
                                                             <TableCell key={`${rowIndex}-${field}`} className="px-3 py-2 align-top whitespace-normal">
                                                                 <div
                                                                     className="w-fit max-w-56 overflow-hidden text-ellipsis whitespace-nowrap"
@@ -466,6 +585,43 @@ export default function ProjectPage() {
                         </Button>
                         <Button type="button" onClick={onSaveEditProject} disabled={!editProjectName.trim()}>
                             Save
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog modal={false} open={isColumnsDialogOpen} onOpenChange={setIsColumnsDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Visible columns</DialogTitle>
+                        <DialogDescription>Select columns to display in the table.</DialogDescription>
+                    </DialogHeader>
+
+                    <div className="max-h-72 space-y-2 overflow-auto pr-1">
+                        {fields.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">No columns available.</p>
+                        ) : (
+                            fields.map((field) => (
+                                <label key={field} className="flex items-center gap-2 text-sm">
+                                    <input
+                                        type="checkbox"
+                                        checked={pendingVisibleFieldMap[field] ?? false}
+                                        onChange={() => onTogglePendingVisibleField(field)}
+                                    />
+                                    <span className="truncate" title={field}>
+                                        {field}
+                                    </span>
+                                </label>
+                            ))
+                        )}
+                    </div>
+
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => setIsColumnsDialogOpen(false)}>
+                            Cancel
+                        </Button>
+                        <Button type="button" onClick={onApplyVisibleFields} disabled={selectedPendingFields.length === 0}>
+                            Apply
                         </Button>
                     </DialogFooter>
                 </DialogContent>

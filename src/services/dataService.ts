@@ -25,6 +25,7 @@ export type QueryFilteredRowsParams = {
 export type QueryProjectRowsResult = {
   rows: Record<string, string>[]
   fields: string[]
+  visibleFields: string[]
   total: number
   sql: string
 }
@@ -32,6 +33,7 @@ export type QueryProjectRowsResult = {
 type CacheInfo = {
   rows: Record<string, string>[]
   fields: string[]
+  visibleFields: string[]
 }
 
 const FIELD_ORDER_META_KEY = '__csvista_meta__'
@@ -105,6 +107,21 @@ function normalizeFieldOrder(fields: unknown[]): string[] {
   }
 
   return nextFields
+}
+
+function normalizeVisibleFields(visibleFields: unknown[], fields: string[]): string[] {
+  const normalizedVisibleFields = normalizeFieldOrder(visibleFields)
+  if (normalizedVisibleFields.length === 0) {
+    return fields
+  }
+
+  const allowedFields = new Set(fields)
+  const filteredVisibleFields = normalizedVisibleFields.filter((field) => allowedFields.has(field))
+  if (filteredVisibleFields.length === 0) {
+    return fields
+  }
+
+  return filteredVisibleFields
 }
 
 function normalizeCsvRows(rows: unknown[], fieldOrder: string[]): Record<string, string>[] {
@@ -213,12 +230,16 @@ function sortRows(rows: Record<string, string>[], field: string, direction: Sort
 function sanitizeStoredRows(rawRows: unknown[]): CacheInfo {
   const rows: Record<string, string>[] = []
   let fieldsFromMeta: string[] = []
+  let visibleFieldsFromMeta: string[] = []
 
   for (const row of rawRows) {
     if (typeof row === 'object' && row !== null) {
       const metadataCandidate = row as Record<string, unknown>
       if (metadataCandidate[FIELD_ORDER_META_KEY] === FIELD_ORDER_META_VALUE && Array.isArray(metadataCandidate.fields)) {
         fieldsFromMeta = normalizeFieldOrder(metadataCandidate.fields)
+        if (Array.isArray(metadataCandidate.visibleFields)) {
+          visibleFieldsFromMeta = normalizeFieldOrder(metadataCandidate.visibleFields)
+        }
         continue
       }
     }
@@ -242,10 +263,12 @@ function sanitizeStoredRows(rawRows: unknown[]): CacheInfo {
   }
 
   const fields = fieldsFromMeta.length > 0 ? fieldsFromMeta : rows.length > 0 ? Object.keys(rows[0]) : []
+  const visibleFields = normalizeVisibleFields(visibleFieldsFromMeta, fields)
 
   return {
     rows,
     fields,
+    visibleFields,
   }
 }
 
@@ -255,6 +278,7 @@ async function load(projectId: string): Promise<CacheInfo> {
     const emptyEntry: CacheInfo = {
       rows: [],
       fields: [],
+      visibleFields: [],
     }
     cache = emptyEntry
     return emptyEntry
@@ -264,9 +288,11 @@ async function load(projectId: string): Promise<CacheInfo> {
   const sanitizedData = sanitizeStoredRows(rawRows)
   const rows = sanitizedData.rows
   const fields = sanitizedData.fields
+  const visibleFields = sanitizedData.visibleFields
   const cacheEntry: CacheInfo = {
     rows,
     fields,
+    visibleFields,
   }
   cache = cacheEntry
 
@@ -274,7 +300,7 @@ async function load(projectId: string): Promise<CacheInfo> {
 }
 
 export const dataService = {
-  async importCsv(projectId: string, csvText: string): Promise<{ totalRows: number; fields: string[] }> {
+  async importCsv(projectId: string, csvText: string): Promise<{ totalRows: number; fields: string[]; visibleFields: string[] }> {
     await ensureProjectStore(projectId)
     const parseResult = Papa.parse<Record<string, unknown>>(csvText, {
       header: true,
@@ -296,6 +322,7 @@ export const dataService = {
     await store.add({
       [FIELD_ORDER_META_KEY]: FIELD_ORDER_META_VALUE,
       fields,
+      visibleFields: fields,
     })
 
     for (const row of rows) {
@@ -306,11 +333,13 @@ export const dataService = {
     cache = {
       rows,
       fields,
+      visibleFields: fields,
     }
 
     return {
       totalRows: rows.length,
       fields,
+      visibleFields: fields,
     }
   },
 
@@ -318,6 +347,7 @@ export const dataService = {
     const cachedEntry = cache ?? (await load(projectId))
     const rows = cachedEntry.rows
     const fields = cachedEntry.fields
+    const visibleFields = normalizeVisibleFields(cachedEntry.visibleFields, fields)
     const activeFilters = getActiveFilters(params)
 
     let processedRows = rows
@@ -337,6 +367,7 @@ export const dataService = {
     return {
       rows: paginatedRows,
       fields,
+      visibleFields,
       total: processedRows.length,
       sql: buildSqlLikeQuery(projectId, params),
     }
@@ -353,6 +384,48 @@ export const dataService = {
     }
 
     return processedRows
+  },
+
+  async saveVisibleFields(projectId: string, visibleFields: string[]): Promise<string[]> {
+    const db = await getDb()
+    if (!db.objectStoreNames.contains(projectId)) {
+      return []
+    }
+
+    const cachedEntry = cache ?? (await load(projectId))
+    const nextVisibleFields = normalizeVisibleFields(visibleFields, cachedEntry.fields)
+    const transaction = db.transaction(projectId, 'readwrite')
+    const store = transaction.objectStore(projectId)
+    const allRows = await store.getAll()
+    const dataRows = allRows.filter((row) => {
+      if (typeof row !== 'object' || row === null) {
+        return false
+      }
+
+      const candidate = row as Record<string, unknown>
+      return candidate[FIELD_ORDER_META_KEY] !== FIELD_ORDER_META_VALUE
+    })
+
+    await store.clear()
+    await store.add({
+      [FIELD_ORDER_META_KEY]: FIELD_ORDER_META_VALUE,
+      fields: cachedEntry.fields,
+      visibleFields: nextVisibleFields,
+    })
+
+    for (const row of dataRows) {
+      await store.add(row)
+    }
+
+    await transaction.done
+
+    cache = {
+      rows: cachedEntry.rows,
+      fields: cachedEntry.fields,
+      visibleFields: nextVisibleFields,
+    }
+
+    return nextVisibleFields
   },
 
   async delete(projectId: string): Promise<void> {
