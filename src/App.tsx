@@ -4,8 +4,9 @@ import ChartPage from '@/pages/ChartPage'
 import ProjectListPage from '@/pages/ProjectListPage'
 import ProjectPage from '@/pages/ProjectPage'
 import { dataService } from '@/services/dataService'
-import { type Project, projectService } from '@/services/projectService'
+import { projectService } from '@/services/projectService'
 import csvFileLogo from '@/assets/csv-file.png'
+import type { Project } from './entities/project'
 
 function App() {
   const location = useLocation()

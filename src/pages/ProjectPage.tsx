@@ -75,11 +75,11 @@ export default function ProjectPage() {
 
         try {
             const result = await dataService.search(projectId, {
-                page,
-                pageSize,
-                sortField: sortField || undefined,
-                sortDirection,
-                filterValues: appliedFilters,
+                Page: page,
+                PageSize: pageSize,
+                SortField: sortField || undefined,
+                SortDirection: sortDirection,
+                FilterValues: appliedFilters,
             })
 
             if (isCancelled?.()) {

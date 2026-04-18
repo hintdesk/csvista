@@ -295,6 +295,3 @@ export const projectService = {
     }
   },
 }
-
-export type { Project }
-export type { ProjectChart }

@@ -8,7 +8,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { dataService } from '@/services/dataService'
-import { type Project, projectService } from '@/services/projectService'
+import { projectService } from '@/services/projectService'
+import type { Project } from '@/entities/project'
 
 export default function ProjectListPage() {
   const navigate = useNavigate()

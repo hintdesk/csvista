@@ -1,9 +1,9 @@
 import type { SortDirection } from "./sortDirection"
 
-export type QueryParams = {
-  page: number
-  pageSize: number
-  sortField?: string
-  sortDirection?: SortDirection
-  filterValues?: Record<string, string>
+export type SearchParams = {
+  Page: number
+  PageSize: number
+  SortField?: string
+  SortDirection?: SortDirection
+  FilterValues?: Record<string, string>
 }

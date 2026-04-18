@@ -1,13 +1,11 @@
 import type { CacheInfo } from '@/entities/cacheInfo'
-import type { QueryParams } from '@/entities/searchParams'
+import type { SearchParams } from '@/entities/searchParams'
 import type { SearchResult } from '@/entities/searchResult'
 import type { SortDirection } from '@/entities/sortDirection'
 import { openDB, type IDBPDatabase } from 'idb'
 import Papa from 'papaparse'
 
 const DATABASE_NAME = 'csvista'
-
-
 
 let dbPromise: Promise<IDBPDatabase> | null = null
 let cache: CacheInfo | null = null
@@ -53,7 +51,7 @@ async function ensureProjectStore(projectId: string): Promise<void> {
 }
 
 function normalizeFields(fields: unknown[]): string[] {
-  const nextFields: string[] = []
+  const result: string[] = []
 
   for (const field of fields) {
     if (typeof field !== 'string') {
@@ -65,14 +63,14 @@ function normalizeFields(fields: unknown[]): string[] {
       continue
     }
 
-    if (nextFields.includes(trimmedField)) {
+    if (result.includes(trimmedField)) {
       continue
     }
 
-    nextFields.push(trimmedField)
+    result.push(trimmedField)
   }
 
-  return nextFields
+  return result
 }
 
 function normalizeCsvRows(rows: unknown[], fieldOrder: string[]): Record<string, string>[] {
@@ -94,7 +92,7 @@ function normalizeCsvRows(rows: unknown[], fieldOrder: string[]): Record<string,
     .filter((row) => Object.keys(row).length > 0)
 }
 
-function buildSqlLikeQuery(projectId: string, params: QueryParams) {
+function buildSqlLikeQuery(projectId: string, params: SearchParams) {
   const parts = [`SELECT * FROM "${projectId}"`]
   const activeFilters = getActiveFilters(params)
 
@@ -119,20 +117,20 @@ function buildSqlLikeQuery(projectId: string, params: QueryParams) {
     parts.push(`WHERE ${whereClauses.join(' AND ')}`)
   }
 
-  if (params.sortField) {
-    parts.push(`ORDER BY "${params.sortField}" ${params.sortDirection === 'desc' ? 'DESC' : 'ASC'}`)
+  if (params.SortField) {
+    parts.push(`ORDER BY "${params.SortField}" ${params.SortDirection === 'desc' ? 'DESC' : 'ASC'}`)
   }
 
-  const offset = (Math.max(params.page, 1) - 1) * Math.max(params.pageSize, 1)
-  parts.push(`LIMIT ${Math.max(params.pageSize, 1)} OFFSET ${offset}`)
+  const offset = (Math.max(params.Page, 1) - 1) * Math.max(params.PageSize, 1)
+  parts.push(`LIMIT ${Math.max(params.PageSize, 1)} OFFSET ${offset}`)
 
   return parts.join(' ')
 }
 
-function getActiveFilters(params: QueryParams): Record<string, string> {
+function getActiveFilters(params: SearchParams): Record<string, string> {
   const normalizedFilters: Record<string, string> = {}
 
-  for (const [field, value] of Object.entries(params.filterValues ?? {})) {
+  for (const [field, value] of Object.entries(params.FilterValues ?? {})) {
     const trimmedField = field.trim()
     const trimmedValue = value.trim()
     if (!trimmedField || !trimmedValue) {
@@ -243,7 +241,7 @@ export const dataService = {
     return rows;
   },
 
-  async search(projectId: string, params: QueryParams): Promise<SearchResult> {
+  async search(projectId: string, params: SearchParams): Promise<SearchResult> {
     const cachedEntry = cache ?? (await load(projectId))
     const rows = cachedEntry.Rows
     const activeFilters = getActiveFilters(params)
@@ -253,12 +251,12 @@ export const dataService = {
       processedRows = processedRows.filter((row) => matchesFieldFilterValue(row[field] ?? '', value))
     }
 
-    if (params.sortField) {
-      processedRows = sortRows(processedRows, params.sortField, params.sortDirection ?? 'asc')
+    if (params.SortField) {
+      processedRows = sortRows(processedRows, params.SortField, params.SortDirection ?? 'asc')
     }
 
-    const page = Math.max(params.page, 1)
-    const pageSize = Math.max(params.pageSize, 1)
+    const page = Math.max(params.Page, 1)
+    const pageSize = Math.max(params.PageSize, 1)
     const startIndex = (page - 1) * pageSize
     const paginatedRows = processedRows.slice(startIndex, startIndex + pageSize)
 
