@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { BarChart3 as BarChartIcon, LineChart as LineChartIcon, Pencil, Trash2, X } from 'lucide-react'
+import { BarChart3 as BarChartIcon, LineChart as LineChartIcon, Pencil, Trash2 } from 'lucide-react'
 import { Bar, BarChart, CartesianGrid, Cell, LabelList, Line, LineChart, XAxis, YAxis } from 'recharts'
 import { useParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
@@ -7,7 +7,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
 import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from '@/components/ui/combobox'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
 import { dataService } from '@/services/dataService'
 import { projectService } from '@/services/projectService'
 import type { Project } from '@/entities/project'
@@ -154,23 +153,11 @@ function buildLineChartConfig(seriesList: LineChartSeries[]): ChartConfig {
 }
 
 
-async function loadData(projectId: string, filterField: string, appliedFilterValue: string) {
-    const loadedRows = await dataService.filter(projectId, {
-        filterField: filterField || undefined,
-        filterValue: appliedFilterValue || undefined,
-    })
-
-    return loadedRows
-}
-
 export default function ChartPage() {
     const { id = '' } = useParams()
     const [project, setProject] = useState<Project | undefined>()
     const [rows, setRows] = useState<Record<string, string>[]>([])
     const [fields, setFields] = useState<string[]>([])
-    const [filterField, setFilterField] = useState('')
-    const [filterInputValue, setFilterInputValue] = useState('')
-    const [appliedFilterValue, setAppliedFilterValue] = useState('')
     const [charts, setCharts] = useState<ProjectChart[]>([])
     const [isChartDialogOpen, setIsChartDialogOpen] = useState(false)
     const [chartDialogMode, setChartDialogMode] = useState<'create' | 'edit'>('create')
@@ -212,7 +199,7 @@ export default function ChartPage() {
 
         setErrorMessage('')
 
-        loadData(projectId, filterField, appliedFilterValue)
+        dataService.get(projectId)
             .then((loadedRows) => {
                 if (isCancelled) {
                     return
@@ -222,12 +209,6 @@ export default function ChartPage() {
                 setFields(visibleFields)
                 setRows(loadedRows)
                 setCharts((previous) => previous.filter((chart) => visibleFields.includes(chart.Field ?? '')))
-
-                if (filterField && !visibleFields.includes(filterField)) {
-                    setFilterField('')
-                    setFilterInputValue('')
-                    setAppliedFilterValue('')
-                }
             })
             .catch((error: unknown) => {
                 if (isCancelled) {
@@ -240,7 +221,7 @@ export default function ChartPage() {
         return () => {
             isCancelled = true
         }
-    }, [appliedFilterValue, filterField, project?.Id])
+    }, [project?.Id])
 
     const onOpenAddChartDialog = () => {
         if (fields.length === 0) {
@@ -480,65 +461,6 @@ export default function ChartPage() {
                     </Combobox>
                 </div>
             </section>
-
-            <div className="grid gap-3">
-                <div className="flex flex-col gap-2">
-                    <p className="text-sm font-medium">Filter</p>
-                    <div className="flex gap-2">
-                        <Combobox
-                            value={filterField || null}
-                            onValueChange={(value) => {
-                                const nextFilterField = (value as string) ?? ''
-                                setFilterField(nextFilterField)
-                                if (!nextFilterField) {
-                                    setFilterInputValue('')
-                                    setAppliedFilterValue('')
-                                }
-                            }}
-                        >
-                            <ComboboxInput className="w-full" placeholder="None" disabled={fields.length === 0} readOnly />
-                            <ComboboxContent>
-                                <ComboboxEmpty>No fields available</ComboboxEmpty>
-                                <ComboboxList>
-                                    <ComboboxItem value="">None</ComboboxItem>
-                                    {fields.map((field) => (
-                                        <ComboboxItem key={field} value={field}>
-                                            {field}
-                                        </ComboboxItem>
-                                    ))}
-                                </ComboboxList>
-                            </ComboboxContent>
-                        </Combobox>
-                        <div className="relative w-full">
-                            <Input
-                                value={filterInputValue}
-                                onChange={(event) => setFilterInputValue(event.target.value)}
-                                onKeyDown={(event) => {
-                                    if (event.key === 'Enter') {
-                                        setAppliedFilterValue(filterInputValue)
-                                    }
-                                }}
-                                className="pr-8"
-                                placeholder="Enter filter value"
-                                disabled={fields.length === 0 || !filterField}
-                            />
-                            {filterInputValue ? (
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setFilterInputValue('')
-                                        setAppliedFilterValue('')
-                                    }}
-                                    className="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                                    aria-label="Clear filter"
-                                >
-                                    <X className="size-4" />
-                                </button>
-                            ) : null}
-                        </div>
-                    </div>
-                </div>
-            </div>
 
             {errorMessage ? <p className="text-sm text-destructive">{errorMessage}</p> : null}
 

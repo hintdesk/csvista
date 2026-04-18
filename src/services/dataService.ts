@@ -6,8 +6,6 @@ import Papa from 'papaparse'
 const DATABASE_NAME = 'csvista'
 
 
-
-
 export type QueryFilteredRowsParams = {
   filterValues?: Record<string, string>
   filterField?: string
@@ -252,6 +250,12 @@ export const dataService = {
     return { totalRows: rows.length, fields }
   },
 
+  async get(projectId: string): Promise<Record<string, string>[]> {
+    const cachedEntry = cache ?? (await load(projectId));
+    const rows = cachedEntry.rows;
+    return rows;
+  },
+
   async search(projectId: string, params: QueryParams): Promise<QueryProjectRowsResult> {
     const cachedEntry = cache ?? (await load(projectId))
     const rows = cachedEntry.rows
@@ -276,19 +280,6 @@ export const dataService = {
       total: processedRows.length,
       sql: buildSqlLikeQuery(projectId, params),
     }
-  },
-
-  async filter(projectId: string, params: QueryFilteredRowsParams): Promise<Record<string, string>[]> {
-    const cachedEntry = cache ?? (await load(projectId))
-    const rows = cachedEntry.rows
-    const activeFilters = getActiveFilters(params)
-
-    let processedRows = rows
-    for (const [field, value] of Object.entries(activeFilters)) {
-      processedRows = processedRows.filter((row) => matchesFieldFilterValue(row[field] ?? '', value))
-    }
-
-    return processedRows
   },
 
   async delete(projectId: string): Promise<void> {
