@@ -11,6 +11,9 @@ import { dataService } from '@/services/dataService'
 import { projectService } from '@/services/projectService'
 import type { Project } from '@/entities/project'
 import type { ProjectChart } from '@/entities/projectChart'
+import type { LineChartPoint } from '@/entities/lineChartPoint'
+import type { LineChartSeries } from '@/entities/lineChartSeries'
+import type { LineChartModel } from '@/entities/lineChartModel'
 
 const barChartConfig = {
     count: {
@@ -20,22 +23,6 @@ const barChartConfig = {
 } satisfies ChartConfig
 
 const TOTAL_CHART_COLORS = 20
-
-type LineChartSeries = {
-    key: string
-    label: string
-    color: string
-}
-
-type LineChartPoint = {
-    x: string
-    [seriesKey: string]: number | string
-}
-
-type LineChartModel = {
-    data: LineChartPoint[]
-    series: LineChartSeries[]
-}
 
 function createChartId() {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
