@@ -23,6 +23,7 @@ export default function ProjectListPage() {
   const [newProjectDescription, setNewProjectDescription] = useState('')
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [pendingDeleteProject, setPendingDeleteProject] = useState<Project | null>(null)
+  const [isResetDialogOpen, setIsResetDialogOpen] = useState(false)
 
   const onDeleteProject = (event: MouseEvent<HTMLButtonElement>, id: string) => {
     event.stopPropagation()
@@ -64,6 +65,21 @@ export default function ProjectListPage() {
 
   const onCreateProject = () => {
     setIsCreateDialogOpen(true)
+  }
+
+  const onOpenResetDialog = () => {
+    setIsResetDialogOpen(true)
+  }
+
+  const onCancelReset = () => {
+    setIsResetDialogOpen(false)
+  }
+
+  const onConfirmReset = async () => {
+    await dataService.resetDatabase()
+    await queryClient.invalidateQueries({ queryKey: ['projects'] })
+    setIsResetDialogOpen(false)
+    navigate('/')
   }
 
   const onCancelCreateProject = () => {
@@ -127,9 +143,14 @@ export default function ProjectListPage() {
         )}
       </Card>
 
-      <Button type="button" onClick={onCreateProject} className="self-start">
-        Create project
-      </Button>
+      <div className="flex items-center justify-between gap-3">
+        <Button type="button" onClick={onCreateProject}>
+          Create project
+        </Button>
+        <Button type="button" variant="destructive" onClick={onOpenResetDialog}>
+          Reset
+        </Button>
+      </div>
 
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
         <DialogContent>
@@ -177,6 +198,26 @@ export default function ProjectListPage() {
               No
             </Button>
             <Button type="button" variant="destructive" onClick={onConfirmDeleteProject}>
+              Yes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isResetDialogOpen} onOpenChange={setIsResetDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reset database</DialogTitle>
+            <DialogDescription>
+              Do you want to reset? The entire database will be dropped and recreated.
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onCancelReset}>
+              No
+            </Button>
+            <Button type="button" variant="destructive" onClick={onConfirmReset}>
               Yes
             </Button>
           </DialogFooter>

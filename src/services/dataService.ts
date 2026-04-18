@@ -2,7 +2,7 @@ import type { CacheInfo } from '@/entities/cacheInfo'
 import type { SearchParams } from '@/entities/searchParams'
 import type { SearchResult } from '@/entities/searchResult'
 import type { SortDirection } from '@/entities/sortDirection'
-import { openDB, type IDBPDatabase } from 'idb'
+import { deleteDB, openDB, type IDBPDatabase } from 'idb'
 import Papa from 'papaparse'
 
 const DATABASE_NAME = 'csvista'
@@ -296,6 +296,15 @@ export const dataService = {
 
     await dbPromise
     cache = null
+  },
+
+  async resetDatabase(): Promise<void> {
+    const db = await getDb()
+    db.close()
+    dbPromise = null
+    cache = null
+
+    await deleteDB(DATABASE_NAME)
   },
 
   clearCache(): void {
