@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Pencil, Plus, Trash2, X } from 'lucide-react'
+import { BarChart3 as BarChartIcon, LineChart as LineChartIcon, Pencil, Trash2, X } from 'lucide-react'
 import { Bar, BarChart, CartesianGrid, Cell, LabelList, Line, LineChart, XAxis, YAxis } from 'recharts'
 import { useParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
@@ -465,13 +465,13 @@ export default function ChartPage() {
                             <ComboboxList>
                                 {canAddBarChart ? (
                                     <ComboboxItem value="bar">
-                                        <Plus className="size-4" />
+                                        <BarChartIcon className="size-4" />
                                         Bar Chart
                                     </ComboboxItem>
                                 ) : null}
                                 {canAddLineChart ? (
                                     <ComboboxItem value="line">
-                                        <Plus className="size-4" />
+                                        <LineChartIcon className="size-4" />
                                         Line Chart
                                     </ComboboxItem>
                                 ) : null}
