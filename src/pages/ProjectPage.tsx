@@ -25,6 +25,8 @@ export default function ProjectPage() {
     const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
     const [appliedFilters, setAppliedFilters] = useState<Record<string, string>>({})
     const [filterInputs, setFilterInputs] = useState<Record<string, string>>({})
+    const [fullTextInput, setFullTextInput] = useState('')
+    const [appliedFullTextQuery, setAppliedFullTextQuery] = useState('')
     const filterDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const [sqlPreview, setSqlPreview] = useState('')
     const [selectedRow, setSelectedRow] = useState<Record<string, string> | null>(null)
@@ -80,6 +82,8 @@ export default function ProjectPage() {
                 SortField: sortField || undefined,
                 SortDirection: sortDirection,
                 FilterValues: appliedFilters,
+                FullTextQuery: appliedFullTextQuery || undefined,
+                SearchFields: project?.Fields ?? [],
             })
 
             if (isCancelled?.()) {
@@ -101,7 +105,7 @@ export default function ProjectPage() {
                 setIsLoadingRows(false)
             }
         }
-    }, [appliedFilters, page, pageSize, project?.Id, sortDirection, sortField])
+    }, [appliedFilters, appliedFullTextQuery, page, pageSize, project?.Fields, project?.Id, sortDirection, sortField])
 
     useEffect(() => {
         let isCancelled = false
@@ -137,6 +141,8 @@ export default function ProjectPage() {
             setSortField('')
             setAppliedFilters({})
             setFilterInputs({})
+            setFullTextInput('')
+            setAppliedFullTextQuery('')
             setPage(1)
             setSelectedRow(null)
             setRefreshKey((previous) => previous + 1)
@@ -244,9 +250,24 @@ export default function ProjectPage() {
         setPage(1)
     }
 
+    const onApplyFullTextSearch = () => {
+        const normalizedQuery = fullTextInput.trim()
+
+        setAppliedFullTextQuery(normalizedQuery)
+        setPage(1)
+    }
+
+    const onClearFullTextSearch = () => {
+        setFullTextInput('')
+        setAppliedFullTextQuery('')
+        setPage(1)
+    }
+
     const onResetFilters = () => {
         setAppliedFilters({})
         setFilterInputs({})
+        setFullTextInput('')
+        setAppliedFullTextQuery('')
         setPage(1)
     }
 
@@ -328,7 +349,35 @@ export default function ProjectPage() {
                         </Button>
                     </header>
 
-                    <div className="flex justify-end gap-2">
+                    <div className="flex flex-wrap justify-end gap-2">
+                        <div className="relative w-full sm:w-80">
+                            <Input
+                                value={fullTextInput}
+                                onChange={(event) => setFullTextInput(event.target.value)}
+                                onKeyDown={(event) => {
+                                    if (event.key === 'Enter') {
+                                        onApplyFullTextSearch()
+                                    }
+                                }}
+                                enterKeyHint="search"
+                                placeholder="Search ..."
+                                className="pr-9"
+                                aria-label="Full-text search over all columns"
+                                disabled={project.Fields.length === 0}
+                            />
+                            {fullTextInput ? (
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    className="absolute top-1/2 right-1 -translate-y-1/2"
+                                    onClick={onClearFullTextSearch}
+                                    aria-label="Clear full-text search"
+                                >
+                                    <X />
+                                </Button>
+                            ) : null}
+                        </div>
                         <Button
                             type="button"
                             variant="outline"

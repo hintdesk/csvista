@@ -6,4 +6,6 @@ export type SearchParams = {
   SortField?: string
   SortDirection?: SortDirection
   FilterValues?: Record<string, string>
+  FullTextQuery?: string
+  SearchFields?: string[]
 }

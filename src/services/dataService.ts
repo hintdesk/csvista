@@ -94,10 +94,13 @@ function normalizeCsvRows(rows: unknown[], fieldOrder: string[]): Record<string,
 
 function buildSqlLikeQuery(projectId: string, params: SearchParams) {
   const parts = [`SELECT * FROM "${projectId}"`]
+  const whereClauses: string[] = []
   const activeFilters = getActiveFilters(params)
+  const fullTextQuery = (params.FullTextQuery ?? '').trim()
+  const searchFields = getSearchFields(params)
 
   if (Object.keys(activeFilters).length > 0) {
-    const whereClauses = Object.entries(activeFilters).map(([field, value]) => {
+    const fieldFilterClauses = Object.entries(activeFilters).map(([field, value]) => {
       const escapedField = field.replaceAll('"', '""')
       const terms = splitFilterTerms(value)
 
@@ -114,6 +117,25 @@ function buildSqlLikeQuery(projectId: string, params: SearchParams) {
       return `(${orClauses.join(' OR ')})`
     })
 
+    whereClauses.push(...fieldFilterClauses)
+  }
+
+  const fullTextTerms = splitFilterTerms(fullTextQuery)
+  if (fullTextTerms.length > 0 && searchFields.length > 0) {
+    const termClauses = fullTextTerms.map((term) => {
+      const escapedTerm = term.replaceAll("'", "''")
+      const fieldClauses = searchFields.map((field) => {
+        const escapedField = field.replaceAll('"', '""')
+        return `"${escapedField}" LIKE '%${escapedTerm}%'`
+      })
+
+      return `(${fieldClauses.join(' OR ')})`
+    })
+
+    whereClauses.push(`(${termClauses.join(' OR ')})`)
+  }
+
+  if (whereClauses.length > 0) {
     parts.push(`WHERE ${whereClauses.join(' AND ')}`)
   }
 
@@ -150,6 +172,21 @@ function splitFilterTerms(value: string): string[] {
     .filter((term) => term.length > 0)
 }
 
+function getSearchFields(params: SearchParams): string[] {
+  const result: string[] = []
+
+  for (const field of params.SearchFields ?? []) {
+    const trimmedField = field.trim()
+    if (!trimmedField || result.includes(trimmedField)) {
+      continue
+    }
+
+    result.push(trimmedField)
+  }
+
+  return result
+}
+
 function matchesFieldFilterValue(rowValue: string, filterValue: string): boolean {
   const queryTerms = splitFilterTerms(filterValue)
   if (queryTerms.length === 0) {
@@ -158,6 +195,18 @@ function matchesFieldFilterValue(rowValue: string, filterValue: string): boolean
 
   const normalizedRowValue = rowValue.toLocaleLowerCase()
   return queryTerms.some((term) => normalizedRowValue.includes(term.toLocaleLowerCase()))
+}
+
+function matchesFullTextQuery(row: Record<string, string>, fullTextQuery: string, searchFields: string[]): boolean {
+  const queryTerms = splitFilterTerms(fullTextQuery)
+  if (queryTerms.length === 0) {
+    return true
+  }
+
+  return queryTerms.some((term) => {
+    const normalizedTerm = term.toLocaleLowerCase()
+    return searchFields.some((field) => (row[field] ?? '').toLocaleLowerCase().includes(normalizedTerm))
+  })
 }
 
 function sortRows(rows: Record<string, string>[], field: string, direction: SortDirection) {
@@ -245,8 +294,14 @@ export const dataService = {
     const cachedEntry = cache ?? (await load(projectId))
     const rows = cachedEntry.Rows
     const activeFilters = getActiveFilters(params)
+    const fullTextQuery = (params.FullTextQuery ?? '').trim()
+    const searchFields = getSearchFields(params)
 
     let processedRows = rows
+    if (fullTextQuery && searchFields.length > 0) {
+      processedRows = processedRows.filter((row) => matchesFullTextQuery(row, fullTextQuery, searchFields))
+    }
+
     for (const [field, value] of Object.entries(activeFilters)) {
       processedRows = processedRows.filter((row) => matchesFieldFilterValue(row[field] ?? '', value))
     }
